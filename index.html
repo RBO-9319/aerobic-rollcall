@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#335bd6">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="有氧點名機">
+  <title>有氧點名機</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow" id="todayLabel"></p>
+        <h1>有氧點名機</h1>
+      </div>
+      <button class="icon-button" id="installButton" type="button" hidden>安裝 App</button>
+    </header>
+
+    <main>
+      <section class="view is-active" id="rollcallView" aria-labelledby="rollcallTitle">
+        <div class="section-heading">
+          <div>
+            <h2 id="rollcallTitle">今日點名</h2>
+            <p id="attendanceSummary">尚未點名</p>
+          </div>
+          <button class="primary-button" id="addStudentButton" type="button">＋ 新增學員</button>
+        </div>
+
+        <div class="class-tabs" id="classTabs" role="tablist" aria-label="班別"></div>
+
+        <label class="search-box">
+          <span class="sr-only">搜尋學員</span>
+          <span aria-hidden="true">⌕</span>
+          <input id="studentSearch" type="search" placeholder="搜尋學員姓名" autocomplete="off">
+        </label>
+
+        <div class="student-list" id="studentList"></div>
+        <div class="empty-state" id="studentEmpty" hidden>
+          <strong>這個班別還沒有學員</strong>
+          <span>按「新增學員」建立第一筆資料。</span>
+        </div>
+      </section>
+
+      <section class="view" id="recordsView" aria-labelledby="recordsTitle" hidden>
+        <div class="section-heading">
+          <div><h2 id="recordsTitle">點名紀錄</h2><p>簽到與續卡都會保留</p></div>
+          <button class="secondary-button" id="exportCsvButton" type="button">匯出 CSV</button>
+        </div>
+        <div class="filter-row">
+          <label>班別<select id="recordClassFilter"></select></label>
+          <label>類型<select id="recordTypeFilter">
+            <option value="all">全部</option>
+            <option value="checkin">簽到</option>
+            <option value="renew">續卡</option>
+            <option value="adjust">調整</option>
+          </select></label>
+        </div>
+        <div class="record-list" id="recordList"></div>
+        <div class="empty-state" id="recordEmpty" hidden><strong>尚無紀錄</strong><span>完成簽到或續卡後會顯示在這裡。</span></div>
+      </section>
+
+      <section class="view" id="settingsView" aria-labelledby="settingsTitle" hidden>
+        <div class="section-heading"><div><h2 id="settingsTitle">資料與設定</h2><p>班別、備份與還原</p></div></div>
+        <div class="settings-grid">
+          <article class="settings-card">
+            <h3>班別管理</h3>
+            <div id="classManager" class="class-manager"></div>
+            <form id="addClassForm" class="inline-form">
+              <label class="sr-only" for="newClassName">新班別名稱</label>
+              <input id="newClassName" required maxlength="24" placeholder="例如：週二早班">
+              <button class="secondary-button" type="submit">新增</button>
+            </form>
+          </article>
+          <article class="settings-card">
+            <h3>完整備份</h3>
+            <p>匯出 JSON 可保存所有班別、學員與紀錄。</p>
+            <div class="button-row">
+              <button class="secondary-button" id="exportBackupButton" type="button">下載備份</button>
+              <label class="secondary-button file-button">還原備份<input id="importBackupInput" type="file" accept="application/json,.json"></label>
+            </div>
+          </article>
+          <article class="settings-card danger-card">
+            <h3>清除示範資料</h3>
+            <p>刪除所有本機資料並回到空白狀態。這個動作不能復原。</p>
+            <button class="danger-button" id="resetButton" type="button">清除全部資料</button>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="主要功能">
+      <button class="nav-button is-active" type="button" data-view="rollcallView"><span aria-hidden="true">✓</span>點名</button>
+      <button class="nav-button" type="button" data-view="recordsView"><span aria-hidden="true">≡</span>紀錄</button>
+      <button class="nav-button" type="button" data-view="settingsView"><span aria-hidden="true">⚙</span>設定</button>
+    </nav>
+  </div>
+
+  <dialog id="studentDialog">
+    <form id="studentForm" method="dialog">
+      <div class="dialog-heading"><h2 id="studentDialogTitle">新增學員</h2><button class="close-button" type="button" data-close="studentDialog" aria-label="關閉">×</button></div>
+      <input type="hidden" id="studentId">
+      <label>姓名<input id="studentName" required maxlength="30" autocomplete="off"></label>
+      <label>班別<select id="studentClass" required></select></label>
+      <label>剩餘堂數<input id="studentRemaining" required type="number" min="0" max="999" inputmode="numeric"></label>
+      <label>備註<textarea id="studentNote" maxlength="120" rows="3" placeholder="選填"></textarea></label>
+      <div class="dialog-actions">
+        <button class="danger-text-button" id="deleteStudentButton" type="button" hidden>刪除學員</button>
+        <span class="spacer"></span>
+        <button class="secondary-button" type="button" data-close="studentDialog">取消</button>
+        <button class="primary-button" type="submit">儲存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="renewDialog">
+    <form id="renewForm" method="dialog">
+      <div class="dialog-heading"><div><h2>學員續卡</h2><p id="renewStudentName"></p></div><button class="close-button" type="button" data-close="renewDialog" aria-label="關閉">×</button></div>
+      <input type="hidden" id="renewStudentId">
+      <div class="renew-options" role="group" aria-label="續卡堂數">
+        <button type="button" data-lessons="4">＋4 堂</button>
+        <button type="button" data-lessons="6">＋6 堂</button>
+        <button type="button" data-lessons="8">＋8 堂</button>
+      </div>
+      <label>自訂堂數<input id="customLessons" type="number" min="1" max="999" inputmode="numeric" placeholder="輸入堂數"></label>
+      <div class="dialog-actions"><span class="spacer"></span><button class="secondary-button" type="button" data-close="renewDialog">取消</button><button class="primary-button" type="submit">確認續卡</button></div>
+    </form>
+  </dialog>
+
+  <div class="snackbar" id="snackbar" role="status" aria-live="polite" hidden>
+    <span id="snackbarText"></span><button id="undoButton" type="button">復原 <span id="undoCountdown"></span></button>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
