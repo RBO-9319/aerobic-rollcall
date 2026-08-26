@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Ren的記事本本圖示">
-  <rect width="512" height="512" rx="112" fill="#335bd6"/>
+  <rect width="512" height="512" rx="112" fill="#d28a16"/>
   <path d="M150 137h212a42 42 0 0 1 42 42v196a42 42 0 0 1-42 42H150a42 42 0 0 1-42-42V179a42 42 0 0 1 42-42Z" fill="#fff" opacity=".98"/>
-  <rect x="176" y="105" width="32" height="76" rx="16" fill="#183a9d"/>
-  <rect x="304" y="105" width="32" height="76" rx="16" fill="#183a9d"/>
-  <circle cx="192" cy="260" r="34" fill="#dfe7ff"/>
-  <path d="m174 260 13 14 25-30" fill="none" stroke="#335bd6" stroke-linecap="round" stroke-linejoin="round" stroke-width="17"/>
-  <path d="M252 239h91M252 281h91M169 345h174" fill="none" stroke="#8ea5ea" stroke-linecap="round" stroke-width="18"/>
+  <rect x="176" y="105" width="32" height="76" rx="16" fill="#9b5e08"/>
+  <rect x="304" y="105" width="32" height="76" rx="16" fill="#9b5e08"/>
+  <circle cx="192" cy="260" r="34" fill="#fff0c2"/>
+  <path d="m174 260 13 14 25-30" fill="none" stroke="#d28a16" stroke-linecap="round" stroke-linejoin="round" stroke-width="17"/>
+  <path d="M252 239h91M252 281h91M169 345h174" fill="none" stroke="#ddb35c" stroke-linecap="round" stroke-width="18"/>
 </svg>

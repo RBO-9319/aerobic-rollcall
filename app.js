@@ -65,7 +65,7 @@
   }
   function renderManagers(){
     $('#roomManager').innerHTML=state.rooms.map(r=>`<div class="class-row"><span>${esc(r.name)} <small>（${state.classes.filter(c=>c.roomId===r.id).length} 班）</small></span><button data-edit-room="${esc(r.id)}">編輯</button></div>`).join('');
-    $('#classManager').innerHTML=state.classes.map(c=>`<div class="class-row"><span>${esc(c.name)} <small>（${state.students.filter(s=>s.classId===c.id).length} 人）</small></span><select data-class-room="${esc(c.id)}">${state.rooms.map(r=>`<option value="${esc(r.id)}" ${r.id===c.roomId?'selected':''}>${esc(r.name)}</option>`).join('')}</select><button data-delete-class="${esc(c.id)}" ${state.classes.length===1?'disabled':''}>刪除</button></div>`).join('');
+    $('#classManager').innerHTML=state.classes.map(c=>`<div class="class-row"><span>${esc(c.name)} <small>（${state.students.filter(s=>s.classId===c.id).length}人）</small></span><select data-class-room="${esc(c.id)}">${state.rooms.map(r=>`<option value="${esc(r.id)}" ${r.id===c.roomId?'selected':''}>${esc(r.name)}</option>`).join('')}</select><button data-delete-class="${esc(c.id)}" ${state.classes.length===1?'disabled':''}>刪除</button></div>`).join('');
   }
   function renderAll(){renderControls();renderStudents();renderRooms();renderSessions();renderRecords();renderManagers();}
   function showView(v){$$('.view').forEach(x=>{x.hidden=x.id!==v});$$('.nav-button').forEach(b=>b.classList.toggle('is-active',b.dataset.view===v)); if(v==='roomsView')renderRooms();if(v==='recordsView'){renderSessions();renderRecords();}window.scrollTo({top:0,behavior:'smooth'});}
