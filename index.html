@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
   <meta name="theme-color" content="#d28a16">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -10,7 +10,7 @@
   <title>Ren的記事本本</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=2.1.2">
+  <link rel="stylesheet" href="./styles.css?v=2.2.0">
 </head>
 <body>
   <div class="app-shell">
@@ -68,6 +68,10 @@
           <button type="button" role="tab" aria-selected="false" data-history-mode="attendance">點名紀錄</button>
         </div>
         <div id="sessionHistoryPanel">
+          <section class="quick-session-panel" aria-labelledby="quickSessionTitle">
+            <div><strong id="quickSessionTitle">要記哪個教室？</strong><span>點選教室，直接開始寫本堂記事</span></div>
+            <div class="quick-room-list" id="sessionRoomQuickList"></div>
+          </section>
           <div class="filter-row">
             <label>教室<select id="sessionRoomFilter"></select></label>
             <label>班別<select id="sessionClassFilter"></select></label>
@@ -176,12 +180,13 @@
       <div class="form-grid">
         <label>日期<input id="sessionDate" type="date" required></label>
         <label>時間<input id="sessionTime" type="time"></label>
-        <label>班別<select id="sessionClass" required></select></label>
         <label>教室<select id="sessionRoom" required></select></label>
+        <label>班別<select id="sessionClass" required></select></label>
       </div>
-      <div class="dialog-section-heading"><h3>本堂內容</h3><button class="text-button" id="copyLastSessionButton" type="button">帶入上一堂內容</button></div>
-      <label>訓練內容<textarea id="sessionTraining" rows="3" maxlength="1000" placeholder="今天做了哪些動作、組數、器材或強度"></textarea></label>
-      <label>播放音樂<textarea id="sessionMusic" rows="2" maxlength="500" placeholder="歌單、歌曲名稱或音樂風格"></textarea></label>
+      <div class="dialog-section-heading"><h3>訓練項目與音樂</h3><button class="text-button" id="copyLastSessionButton" type="button">帶入上一堂內容</button></div>
+      <p class="field-help">每個訓練項目可以搭配一首音樂，例如：項目「弓箭步」／音樂「XXXXX」。</p>
+      <div class="training-items" id="sessionTrainingItems"></div>
+      <button class="secondary-button add-training-button" id="addTrainingItemButton" type="button">＋ 新增訓練項目</button>
       <label>課堂備註<textarea id="sessionNote" rows="2" maxlength="500" placeholder="教室狀況、下堂提醒或其他事項"></textarea></label>
       <div class="dialog-section-heading"><h3>學生紀錄</h3><span class="muted-text">勾選出席，特殊狀況可個別填寫</span></div>
       <div id="sessionStudentList" class="session-student-list"></div>
@@ -207,6 +212,6 @@
     <span id="snackbarText"></span><button id="undoButton" type="button">復原 <span id="undoCountdown"></span></button>
   </div>
 
-  <script src="./app.js?v=2.1.2"></script>
+  <script src="./app.js?v=2.2.0"></script>
 </body>
 </html>

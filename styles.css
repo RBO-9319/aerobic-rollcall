@@ -18,7 +18,7 @@
 
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-html { background: var(--bg); }
+html { background: var(--bg); touch-action: manipulation; }
 body { margin: 0; color: var(--text); background: var(--bg); min-height: 100vh; letter-spacing: .01em; }
 button, input, select, textarea { font: inherit; }
 button { touch-action: manipulation; }
@@ -100,6 +100,14 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .history-tabs { display: flex; gap: 7px; margin-bottom: 14px; padding: 4px; border-radius: 13px; background: #f5e7c7; }
 .history-tabs button { flex: 1; border: 0; border-radius: 10px; padding: 9px; background: transparent; color: var(--muted); cursor: pointer; }
 .history-tabs button[aria-selected="true"] { background: var(--surface); color: var(--primary); box-shadow: 0 2px 8px rgba(35,53,91,.08); font-weight: 750; }
+.quick-session-panel { display: grid; gap: 10px; margin-bottom: 14px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.quick-session-panel > div:first-child { display: grid; gap: 3px; }
+.quick-session-panel > div:first-child span { color: var(--muted); font-size: 12px; }
+.quick-room-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.quick-room-list button { display: grid; gap: 4px; min-width: 0; padding: 11px 12px; border: 1px solid #dfbd72; border-radius: 12px; background: var(--surface-soft); color: var(--text); text-align: left; cursor: pointer; }
+.quick-room-list button strong { color: var(--primary-dark); }
+.quick-room-list button span { overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.quick-room-list button:disabled { opacity: .55; cursor: default; }
 .session-card { border: 1px solid var(--line); background: var(--surface); border-radius: 16px; overflow: hidden; }
 .session-card-button { width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 15px; border: 0; background: transparent; color: var(--text); text-align: left; cursor: pointer; }
 .session-date-badge { width: 48px; height: 52px; display: grid; place-items: center; align-content: center; border-radius: 12px; background: var(--surface-soft); color: var(--primary); }
@@ -143,6 +151,7 @@ dialog form { display: grid; gap: 15px; padding: 20px; }
 .wide-dialog { width: min(calc(100% - 30px), 680px); max-height: min(88vh, 880px); }
 .wide-dialog form, .wide-dialog .dialog-content { max-height: min(88vh, 880px); overflow-y: auto; }
 .dialog-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.wide-dialog .dialog-heading { position: sticky; z-index: 4; top: -20px; margin: -20px -20px 0; padding: 18px 20px 12px; border-bottom: 1px solid var(--line); background: rgba(255,253,247,.98); backdrop-filter: blur(12px); }
 .dialog-heading h2 { margin: 0; font-size: 20px; }
 .dialog-heading p { margin: 4px 0 0; color: var(--muted); }
 .close-button { border: 0; background: transparent; color: var(--muted); font-size: 27px; cursor: pointer; line-height: 1; }
@@ -153,6 +162,12 @@ dialog form { display: grid; gap: 15px; padding: 20px; }
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
 .dialog-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 4px; }
 .dialog-section-heading h3 { margin: 0; font-size: 16px; }
+.field-help { margin: -7px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.training-items { display: grid; gap: 8px; }
+.training-item-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; align-items: end; padding: 10px; border: 1px solid var(--line); border-radius: 13px; background: var(--bg); }
+.training-item-row label span { color: var(--primary-dark); }
+.training-item-row button { width: 36px; height: 42px; border: 0; border-radius: 10px; background: var(--danger-soft); color: var(--danger); cursor: pointer; font-size: 22px; }
+.add-training-button { justify-self: start; }
 .text-button { border: 0; background: transparent; color: var(--primary); cursor: pointer; font-weight: 700; padding: 4px; }
 .muted-text { color: var(--muted); font-size: 12px; }
 .session-student-list { display: grid; gap: 8px; }
@@ -177,6 +192,11 @@ dialog form { display: grid; gap: 15px; padding: 20px; }
   .student-note { max-width: 115px; }
   .room-grid { grid-template-columns: 1fr; }
   .form-grid { grid-template-columns: 1fr; }
+  input, select, textarea { font-size: 16px; }
+  .quick-room-list { grid-template-columns: 1fr; }
+  .training-item-row { grid-template-columns: 1fr auto; }
+  .training-item-row label:nth-child(2) { grid-column: 1; }
+  .training-item-row button { grid-column: 2; grid-row: 1 / span 2; align-self: stretch; height: auto; }
   .session-student-row { grid-template-columns: auto 1fr; }
   .session-student-row input[type="text"] { grid-column: 1 / -1; }
 }
