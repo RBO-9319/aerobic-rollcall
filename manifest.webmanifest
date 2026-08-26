@@ -1,7 +1,7 @@
 {
-  "name": "有氧點名機",
-  "short_name": "有氧點名",
-  "description": "管理有氧課程學員、堂數與點名紀錄",
+  "name": "Ren的記事本本",
+  "short_name": "Ren記事本",
+  "description": "管理教室、課堂內容、學員堂數與點名紀錄",
   "lang": "zh-Hant",
   "start_url": "./",
   "scope": "./",

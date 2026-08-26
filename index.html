@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#335bd6">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <meta name="apple-mobile-web-app-title" content="有氧點名機">
-  <title>有氧點名機</title>
+  <meta name="apple-mobile-web-app-title" content="Ren的記事本本">
+  <title>Ren的記事本本</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
@@ -17,7 +17,7 @@
     <header class="topbar">
       <div>
         <p class="eyebrow" id="todayLabel"></p>
-        <h1>有氧點名機</h1>
+        <h1>Ren的記事本本</h1>
       </div>
       <button class="icon-button" id="installButton" type="button" hidden>安裝 App</button>
     </header>
@@ -29,7 +29,10 @@
             <h2 id="rollcallTitle">今日點名</h2>
             <p id="attendanceSummary">尚未點名</p>
           </div>
-          <button class="primary-button" id="addStudentButton" type="button">＋ 新增學員</button>
+          <div class="section-actions">
+            <button class="secondary-button" id="addStudentButton" type="button">＋ 學員</button>
+            <button class="primary-button" id="quickSessionButton" type="button">＋ 記錄本堂</button>
+          </div>
         </div>
 
         <div class="class-tabs" id="classTabs" role="tablist" aria-label="班別"></div>
@@ -47,27 +50,55 @@
         </div>
       </section>
 
+      <section class="view" id="roomsView" aria-labelledby="roomsTitle" hidden>
+        <div class="section-heading">
+          <div><h2 id="roomsTitle">教室總覽</h2><p>點卡片查看該教室的班別、課堂與學生</p></div>
+          <button class="primary-button" id="addRoomButton" type="button">＋ 新增教室</button>
+        </div>
+        <div class="room-grid" id="roomGrid"></div>
+      </section>
+
       <section class="view" id="recordsView" aria-labelledby="recordsTitle" hidden>
         <div class="section-heading">
-          <div><h2 id="recordsTitle">點名紀錄</h2><p>簽到與續卡都會保留</p></div>
-          <button class="secondary-button" id="exportCsvButton" type="button">匯出 CSV</button>
+          <div><h2 id="recordsTitle">歷史紀錄</h2><p>課堂記事、點名與續卡都會保留</p></div>
+          <button class="primary-button" id="addSessionButton" type="button">＋ 課堂紀錄</button>
         </div>
-        <div class="filter-row">
-          <label>班別<select id="recordClassFilter"></select></label>
-          <label>類型<select id="recordTypeFilter">
-            <option value="all">全部</option>
-            <option value="checkin">簽到</option>
-            <option value="renew">續卡</option>
-            <option value="adjust">調整</option>
-          </select></label>
+        <div class="history-tabs" role="tablist" aria-label="紀錄類型">
+          <button type="button" role="tab" aria-selected="true" data-history-mode="sessions">課堂記事</button>
+          <button type="button" role="tab" aria-selected="false" data-history-mode="attendance">點名紀錄</button>
         </div>
-        <div class="record-list" id="recordList"></div>
-        <div class="empty-state" id="recordEmpty" hidden><strong>尚無紀錄</strong><span>完成簽到或續卡後會顯示在這裡。</span></div>
+        <div id="sessionHistoryPanel">
+          <div class="filter-row">
+            <label>教室<select id="sessionRoomFilter"></select></label>
+            <label>班別<select id="sessionClassFilter"></select></label>
+          </div>
+          <div class="session-list" id="sessionList"></div>
+          <div class="empty-state" id="sessionEmpty" hidden><strong>尚無課堂記事</strong><span>按「課堂紀錄」開始記下訓練、音樂與學生狀況。</span></div>
+        </div>
+        <div id="attendanceHistoryPanel" hidden>
+          <div class="filter-row">
+            <label>班別<select id="recordClassFilter"></select></label>
+            <label>類型<select id="recordTypeFilter">
+              <option value="all">全部</option>
+              <option value="checkin">簽到</option>
+              <option value="renew">續卡</option>
+              <option value="adjust">調整</option>
+            </select></label>
+          </div>
+          <div class="record-list" id="recordList"></div>
+          <div class="empty-state" id="recordEmpty" hidden><strong>尚無紀錄</strong><span>完成簽到或續卡後會顯示在這裡。</span></div>
+          <button class="secondary-button export-button" id="exportCsvButton" type="button">匯出點名 CSV</button>
+        </div>
       </section>
 
       <section class="view" id="settingsView" aria-labelledby="settingsTitle" hidden>
         <div class="section-heading"><div><h2 id="settingsTitle">資料與設定</h2><p>班別、備份與還原</p></div></div>
         <div class="settings-grid">
+          <article class="settings-card">
+            <h3>教室管理</h3>
+            <div id="roomManager" class="class-manager"></div>
+            <button class="secondary-button" id="settingsAddRoomButton" type="button">＋ 新增教室</button>
+          </article>
           <article class="settings-card">
             <h3>班別管理</h3>
             <div id="classManager" class="class-manager"></div>
@@ -79,7 +110,7 @@
           </article>
           <article class="settings-card">
             <h3>完整備份</h3>
-            <p>匯出 JSON 可保存所有班別、學員與紀錄。</p>
+            <p>匯出 JSON 可保存所有教室、班別、學員、點名與課堂記事。更新前建議先下載一次。</p>
             <div class="button-row">
               <button class="secondary-button" id="exportBackupButton" type="button">下載備份</button>
               <label class="secondary-button file-button">還原備份<input id="importBackupInput" type="file" accept="application/json,.json"></label>
@@ -96,7 +127,8 @@
 
     <nav class="bottom-nav" aria-label="主要功能">
       <button class="nav-button is-active" type="button" data-view="rollcallView"><span aria-hidden="true">✓</span>點名</button>
-      <button class="nav-button" type="button" data-view="recordsView"><span aria-hidden="true">≡</span>紀錄</button>
+      <button class="nav-button" type="button" data-view="roomsView"><span aria-hidden="true">▦</span>教室</button>
+      <button class="nav-button" type="button" data-view="recordsView"><span aria-hidden="true">≡</span>記事</button>
       <button class="nav-button" type="button" data-view="settingsView"><span aria-hidden="true">⚙</span>設定</button>
     </nav>
   </div>
@@ -115,6 +147,45 @@
         <button class="secondary-button" type="button" data-close="studentDialog">取消</button>
         <button class="primary-button" type="submit">儲存</button>
       </div>
+    </form>
+  </dialog>
+
+  <dialog id="roomDialog">
+    <form id="roomForm" method="dialog">
+      <div class="dialog-heading"><h2 id="roomDialogTitle">新增教室</h2><button class="close-button" type="button" data-close="roomDialog" aria-label="關閉">×</button></div>
+      <input type="hidden" id="roomId">
+      <label>教室名稱<input id="roomName" required maxlength="40" placeholder="例如：溝美教室"></label>
+      <label>地址／位置<input id="roomLocation" maxlength="100" placeholder="選填"></label>
+      <label>教室備註<textarea id="roomNote" maxlength="240" rows="3" placeholder="設備、停車方式、鑰匙位置等"></textarea></label>
+      <div class="dialog-actions"><button class="danger-text-button" id="deleteRoomButton" type="button" hidden>刪除教室</button><span class="spacer"></span><button class="secondary-button" type="button" data-close="roomDialog">取消</button><button class="primary-button" type="submit">儲存</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="roomDetailDialog" class="wide-dialog">
+    <div class="dialog-content">
+      <div class="dialog-heading"><div><h2 id="roomDetailTitle"></h2><p id="roomDetailLocation"></p></div><button class="close-button" type="button" data-close="roomDetailDialog" aria-label="關閉">×</button></div>
+      <div id="roomDetailContent"></div>
+      <div class="dialog-actions"><button class="secondary-button" id="editRoomFromDetailButton" type="button">編輯教室</button><span class="spacer"></span><button class="primary-button" id="addSessionFromRoomButton" type="button">＋ 課堂紀錄</button></div>
+    </div>
+  </dialog>
+
+  <dialog id="sessionDialog" class="wide-dialog">
+    <form id="sessionForm" method="dialog">
+      <div class="dialog-heading"><div><h2 id="sessionDialogTitle">新增課堂紀錄</h2><p>記下本堂內容與每位學生狀況</p></div><button class="close-button" type="button" data-close="sessionDialog" aria-label="關閉">×</button></div>
+      <input type="hidden" id="sessionId">
+      <div class="form-grid">
+        <label>日期<input id="sessionDate" type="date" required></label>
+        <label>時間<input id="sessionTime" type="time"></label>
+        <label>班別<select id="sessionClass" required></select></label>
+        <label>教室<select id="sessionRoom" required></select></label>
+      </div>
+      <div class="dialog-section-heading"><h3>本堂內容</h3><button class="text-button" id="copyLastSessionButton" type="button">帶入上一堂內容</button></div>
+      <label>訓練內容<textarea id="sessionTraining" rows="3" maxlength="1000" placeholder="今天做了哪些動作、組數、器材或強度"></textarea></label>
+      <label>播放音樂<textarea id="sessionMusic" rows="2" maxlength="500" placeholder="歌單、歌曲名稱或音樂風格"></textarea></label>
+      <label>課堂備註<textarea id="sessionNote" rows="2" maxlength="500" placeholder="教室狀況、下堂提醒或其他事項"></textarea></label>
+      <div class="dialog-section-heading"><h3>學生紀錄</h3><span class="muted-text">勾選出席，特殊狀況可個別填寫</span></div>
+      <div id="sessionStudentList" class="session-student-list"></div>
+      <div class="dialog-actions"><button class="danger-text-button" id="deleteSessionButton" type="button" hidden>刪除紀錄</button><span class="spacer"></span><button class="secondary-button" type="button" data-close="sessionDialog">取消</button><button class="primary-button" type="submit">儲存課堂</button></div>
     </form>
   </dialog>
 

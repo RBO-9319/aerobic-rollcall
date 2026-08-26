@@ -1,480 +1,114 @@
 (() => {
   'use strict';
+  const KEY = 'aerobic-rollcall-state-v1'; // 刻意沿用舊版 key，確保既有資料不會消失
+  const $ = s => document.querySelector(s);
+  const $$ = s => [...document.querySelectorAll(s)];
+  const esc = s => String(s ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+  const id = p => `${p}-${crypto.randomUUID?.() || Date.now() + Math.random()}`;
+  const localDate = (v = new Date()) => { const d = new Date(v); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+  const typeName = { checkin: '簽到', renew: '續卡', adjust: '調整' };
+  const dtf = new Intl.DateTimeFormat('zh-TW', {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
 
-  const STORAGE_KEY = 'aerobic-rollcall-state-v1';
-  const TYPE_LABELS = { checkin: '簽到', renew: '續卡', adjust: '調整' };
-  const dateFormatter = new Intl.DateTimeFormat('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
-
-  const elements = {
-    todayLabel: document.querySelector('#todayLabel'),
-    attendanceSummary: document.querySelector('#attendanceSummary'),
-    classTabs: document.querySelector('#classTabs'),
-    studentSearch: document.querySelector('#studentSearch'),
-    studentList: document.querySelector('#studentList'),
-    studentEmpty: document.querySelector('#studentEmpty'),
-    recordList: document.querySelector('#recordList'),
-    recordEmpty: document.querySelector('#recordEmpty'),
-    recordClassFilter: document.querySelector('#recordClassFilter'),
-    recordTypeFilter: document.querySelector('#recordTypeFilter'),
-    classManager: document.querySelector('#classManager'),
-    studentDialog: document.querySelector('#studentDialog'),
-    studentForm: document.querySelector('#studentForm'),
-    studentDialogTitle: document.querySelector('#studentDialogTitle'),
-    studentId: document.querySelector('#studentId'),
-    studentName: document.querySelector('#studentName'),
-    studentClass: document.querySelector('#studentClass'),
-    studentRemaining: document.querySelector('#studentRemaining'),
-    studentNote: document.querySelector('#studentNote'),
-    deleteStudentButton: document.querySelector('#deleteStudentButton'),
-    renewDialog: document.querySelector('#renewDialog'),
-    renewForm: document.querySelector('#renewForm'),
-    renewStudentName: document.querySelector('#renewStudentName'),
-    renewStudentId: document.querySelector('#renewStudentId'),
-    customLessons: document.querySelector('#customLessons'),
-    snackbar: document.querySelector('#snackbar'),
-    snackbarText: document.querySelector('#snackbarText'),
-    undoCountdown: document.querySelector('#undoCountdown'),
-    installButton: document.querySelector('#installButton')
-  };
-
-  let state = loadState();
-  let undoState = null;
-  let undoTimer = null;
-  let deferredInstallPrompt = null;
-
-  function uid(prefix) {
-    if (globalThis.crypto?.randomUUID) return `${prefix}-${crypto.randomUUID()}`;
-    return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  function demo() {
+    const r1='room-goumei', r2='room-other', c1='class-mon', c2='class-wed', c3='class-fri';
+    return {version:2,activeClassId:c1,
+      rooms:[{id:r1,name:'溝美教室',location:'',note:''},{id:r2,name:'其他教室',location:'',note:''}],
+      classes:[{id:c1,name:'週一晚班',roomId:r1},{id:c2,name:'週三早班',roomId:r1},{id:c3,name:'週五晚班',roomId:r2}],
+      students:[
+        {id:'s1',classId:c1,name:'陳美玲',remaining:6,note:''},{id:'s2',classId:c1,name:'林秀蘭',remaining:3,note:''},
+        {id:'s3',classId:c1,name:'王玉芬',remaining:0,note:'提醒續卡'},{id:'s4',classId:c1,name:'李淑華',remaining:8,note:''},
+        {id:'s5',classId:c2,name:'張雅慧',remaining:5,note:''},{id:'s6',classId:c3,name:'吳麗珍',remaining:2,note:''}],records:[],sessions:[]};
   }
-
-  function createDemoState() {
-    const classOne = 'class-monday-pm';
-    const classTwo = 'class-wednesday-am';
-    const classThree = 'class-friday-pm';
-    return {
-      version: 1,
-      activeClassId: classOne,
-      classes: [
-        { id: classOne, name: '週一晚班' },
-        { id: classTwo, name: '週三早班' },
-        { id: classThree, name: '週五晚班' }
-      ],
-      students: [
-        { id: 'student-1', classId: classOne, name: '陳美玲', remaining: 6, note: '' },
-        { id: 'student-2', classId: classOne, name: '林秀蘭', remaining: 3, note: '' },
-        { id: 'student-3', classId: classOne, name: '王玉芬', remaining: 0, note: '提醒續卡' },
-        { id: 'student-4', classId: classOne, name: '李淑華', remaining: 8, note: '' },
-        { id: 'student-5', classId: classTwo, name: '張雅慧', remaining: 5, note: '' },
-        { id: 'student-6', classId: classThree, name: '吳麗珍', remaining: 2, note: '' }
-      ],
-      records: []
-    };
+  function emptyState() { const r=id('room'), c=id('class'); return {version:2,activeClassId:c,rooms:[{id:r,name:'我的教室',location:'',note:''}],classes:[{id:c,name:'我的班別',roomId:r}],students:[],records:[],sessions:[]}; }
+  function migrate(x) {
+    const rooms=(Array.isArray(x.rooms)&&x.rooms.length?x.rooms:[{id:'room-old-data',name:'未設定教室',location:'',note:'由舊版資料自動建立'}]).map(r=>({id:String(r.id||id('room')),name:String(r.name||'未命名教室').slice(0,40),location:String(r.location||'').slice(0,100),note:String(r.note||'').slice(0,240)}));
+    const roomIds=new Set(rooms.map(r=>r.id)), fallback=rooms[0].id;
+    const classes=x.classes.map(c=>({id:String(c.id),name:String(c.name||'未命名班別').slice(0,24),roomId:roomIds.has(String(c.roomId))?String(c.roomId):fallback}));
+    const state={version:2,activeClassId:String(x.activeClassId||classes[0].id),rooms,classes,
+      students:x.students.map(s=>({id:String(s.id),classId:String(s.classId),name:String(s.name||'未命名').slice(0,30),remaining:Math.max(0,parseInt(s.remaining)||0),note:String(s.note||'').slice(0,120)})),
+      records:x.records.map(r=>({id:String(r.id),studentId:String(r.studentId||''),classId:String(r.classId||''),studentName:String(r.studentName||'未知學員'),type:typeName[r.type]?r.type:'adjust',delta:parseInt(r.delta)||0,createdAt:String(r.createdAt||new Date().toISOString()),note:String(r.note||'')})),
+      sessions:(Array.isArray(x.sessions)?x.sessions:[]).map(s=>({id:String(s.id||id('session')),classId:String(s.classId||classes[0].id),roomId:roomIds.has(String(s.roomId))?String(s.roomId):fallback,date:/^\d{4}-\d{2}-\d{2}$/.test(String(s.date))?String(s.date):localDate(),time:String(s.time||''),training:String(s.training||''),music:String(s.music||''),note:String(s.note||''),students:(Array.isArray(s.students)?s.students:[]).map(a=>({studentId:String(a.studentId||''),name:String(a.name||'未知學員'),present:!!a.present,condition:String(a.condition||'')})),updatedAt:String(s.updatedAt||new Date().toISOString())}))};
+    if(!classes.some(c=>c.id===state.activeClassId)) state.activeClassId=classes[0].id;
+    return state;
   }
+  function load(){try{const x=JSON.parse(localStorage.getItem(KEY));return x&&Array.isArray(x.classes)&&Array.isArray(x.students)&&Array.isArray(x.records)&&x.classes.length?migrate(x):demo();}catch{return demo();}}
+  let state=load(), undo=null, undoTimer=null, installPrompt=null, roomDetailId='';
+  const save=()=>localStorage.setItem(KEY,JSON.stringify(state));
+  const cls=x=>state.classes.find(c=>c.id===x);
+  const room=x=>state.rooms.find(r=>r.id===x);
+  const roomOfClass=x=>room(cls(x)?.roomId)||state.rooms[0];
 
-  function createEmptyState() {
-    const classId = uid('class');
-    return { version: 1, activeClassId: classId, classes: [{ id: classId, name: '我的班別' }], students: [], records: [] };
+  function setOptions(select, list, all=false, fallback='') { const old=select.value; select.innerHTML=(all?'<option value="all">全部</option>':'')+list.map(x=>`<option value="${esc(x.id)}">${esc(x.name)}</option>`).join(''); select.value=[...select.options].some(o=>o.value===old)?old:(fallback||select.options[0]?.value||''); }
+  function renderControls(){
+    $('#classTabs').innerHTML=state.classes.map(c=>`<button class="class-tab" type="button" role="tab" aria-selected="${c.id===state.activeClassId}" data-class-id="${esc(c.id)}">${esc(c.name)}</button>`).join('');
+    setOptions($('#studentClass'),state.classes,false,state.activeClassId); setOptions($('#sessionClass'),state.classes,false,state.activeClassId);
+    setOptions($('#recordClassFilter'),state.classes,true); setOptions($('#sessionClassFilter'),state.classes,true);
+    setOptions($('#sessionRoom'),state.rooms,false,roomOfClass(state.activeClassId).id); setOptions($('#sessionRoomFilter'),state.rooms,true);
   }
-
-  function isValidState(candidate) {
-    return candidate && Array.isArray(candidate.classes) && Array.isArray(candidate.students) && Array.isArray(candidate.records) && candidate.classes.length > 0;
+  function renderStudents(){
+    const q=$('#studentSearch').value.trim().toLowerCase(), list=state.students.filter(s=>s.classId===state.activeClassId), shown=list.filter(s=>!q||s.name.toLowerCase().includes(q)).sort((a,b)=>a.name.localeCompare(b.name,'zh-Hant'));
+    const present=new Set(state.records.filter(r=>r.classId===state.activeClassId&&r.type==='checkin'&&localDate(r.createdAt)===localDate()).map(r=>r.studentId));
+    $('#attendanceSummary').textContent=`${cls(state.activeClassId).name} · ${present.size} / ${list.length} 人已到`; $('#studentEmpty').hidden=!!shown.length;
+    $('#studentList').innerHTML=shown.map(s=>{const zero=s.remaining<=0, checked=present.has(s.id);return `<article class="student-card${zero?' is-empty':''}"><button class="student-info-button" data-action="edit" data-student-id="${esc(s.id)}"><span class="avatar">${esc(s.name[0])}</span><span><span class="student-name">${esc(s.name)}</span><span class="student-meta">剩餘 <span class="remaining${zero?' is-empty':''}">${s.remaining}</span> 堂${s.note?` · ${esc(s.note)}`:''}</span></span></button><div class="student-actions"><button class="renew-button" data-action="renew" data-student-id="${esc(s.id)}">續卡</button><button class="checkin-button" data-action="checkin" data-student-id="${esc(s.id)}" ${zero||checked?'disabled':''}>${checked?'已簽到':zero?'無堂數':'簽到'}</button></div></article>`}).join('');
   }
-
-  function normalizeState(candidate) {
-    const clean = {
-      version: 1,
-      activeClassId: String(candidate.activeClassId || candidate.classes[0].id),
-      classes: candidate.classes.map(item => ({ id: String(item.id), name: String(item.name || '未命名班別').slice(0, 24) })),
-      students: candidate.students.map(item => ({
-        id: String(item.id), classId: String(item.classId), name: String(item.name || '未命名').slice(0, 30),
-        remaining: Math.max(0, Number.parseInt(item.remaining, 10) || 0), note: String(item.note || '').slice(0, 120)
-      })),
-      records: candidate.records.map(item => ({
-        id: String(item.id), studentId: String(item.studentId || ''), classId: String(item.classId || ''),
-        studentName: String(item.studentName || '未知學員').slice(0, 30), type: TYPE_LABELS[item.type] ? item.type : 'adjust',
-        delta: Number.parseInt(item.delta, 10) || 0, createdAt: String(item.createdAt || new Date().toISOString()), note: String(item.note || '').slice(0, 120)
-      }))
-    };
-    if (!clean.classes.some(item => item.id === clean.activeClassId)) clean.activeClassId = clean.classes[0].id;
-    return clean;
+  function renderRooms(){
+    $('#roomGrid').innerHTML=state.rooms.map(r=>{const cs=state.classes.filter(c=>c.roomId===r.id), ids=cs.map(c=>c.id), ss=state.students.filter(s=>ids.includes(s.classId)), logs=state.sessions.filter(s=>s.roomId===r.id).sort((a,b)=>b.date.localeCompare(a.date));return `<button class="room-card" data-room-detail="${esc(r.id)}"><span class="room-card-header"><span><h3>${esc(r.name)}</h3><span class="room-location">${esc(r.location||'尚未填寫位置')}</span></span><span class="room-arrow">›</span></span><span class="room-stats"><span class="room-stat"><strong>${cs.length}</strong><span>班別</span></span><span class="room-stat"><strong>${ss.length}</strong><span>學生</span></span><span class="room-stat"><strong>${logs.length}</strong><span>課堂</span></span></span><span class="room-latest">${logs[0]?`最近：${esc(cls(logs[0].classId)?.name||'已刪除班別')} · ${logs[0].date}`:'尚無課堂紀錄'}</span></button>`}).join('');
   }
-
-  function loadState() {
-    try {
-      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      return isValidState(stored) ? normalizeState(stored) : createDemoState();
-    } catch {
-      return createDemoState();
-    }
+  function renderSessions(){
+    const rf=$('#sessionRoomFilter').value||'all', cf=$('#sessionClassFilter').value||'all';
+    const list=[...state.sessions].filter(s=>(rf==='all'||s.roomId===rf)&&(cf==='all'||s.classId===cf)).sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time)); $('#sessionEmpty').hidden=!!list.length;
+    $('#sessionList').innerHTML=list.map(s=>{const d=new Date(`${s.date}T00:00:00`), p=s.students.filter(a=>a.present).length, preview=s.training||s.music||s.note||'尚未填寫本堂內容';return `<article class="session-card"><button class="session-card-button" data-session-id="${esc(s.id)}"><span class="session-date-badge"><strong>${d.getDate()}</strong><span>${d.getMonth()+1}月</span></span><span><span class="session-title">${esc(cls(s.classId)?.name||'已刪除班別')}</span><span class="session-meta">${esc(room(s.roomId)?.name||'已刪除教室')}${s.time?' · '+esc(s.time):''}</span><span class="session-preview">${esc(preview)}</span></span><span class="attendance-count">${p}/${s.students.length} 人</span></button></article>`}).join('');
   }
-
-  function saveState() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  function renderRecords(){
+    const cf=$('#recordClassFilter').value||'all', tf=$('#recordTypeFilter').value||'all'; const list=[...state.records].filter(r=>(cf==='all'||r.classId===cf)&&(tf==='all'||r.type===tf)).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)); $('#recordEmpty').hidden=!!list.length;
+    $('#recordList').innerHTML=list.map(r=>`<article class="record-item"><span class="record-mark is-${r.type}">${r.type==='checkin'?'✓':r.type==='renew'?'+':'↕'}</span><div><div class="record-title">${esc(r.studentName)} · ${typeName[r.type]}</div><div class="record-detail">${esc(cls(r.classId)?.name||'已刪除班別')}${r.note?' · '+esc(r.note):''}</div><div class="record-time">${dtf.format(new Date(r.createdAt))}</div></div><span class="record-delta${r.delta<0?' is-negative':''}">${r.delta>0?'＋':''}${r.delta} 堂</span></article>`).join('');
   }
-
-  function escapeHtml(value) {
-    return String(value).replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
+  function renderManagers(){
+    $('#roomManager').innerHTML=state.rooms.map(r=>`<div class="class-row"><span>${esc(r.name)} <small>（${state.classes.filter(c=>c.roomId===r.id).length} 班）</small></span><button data-edit-room="${esc(r.id)}">編輯</button></div>`).join('');
+    $('#classManager').innerHTML=state.classes.map(c=>`<div class="class-row"><span>${esc(c.name)} <small>（${state.students.filter(s=>s.classId===c.id).length} 人）</small></span><select data-class-room="${esc(c.id)}">${state.rooms.map(r=>`<option value="${esc(r.id)}" ${r.id===c.roomId?'selected':''}>${esc(r.name)}</option>`).join('')}</select><button data-delete-class="${esc(c.id)}" ${state.classes.length===1?'disabled':''}>刪除</button></div>`).join('');
   }
+  function renderAll(){renderControls();renderStudents();renderRooms();renderSessions();renderRecords();renderManagers();}
+  function showView(v){$$('.view').forEach(x=>{x.hidden=x.id!==v});$$('.nav-button').forEach(b=>b.classList.toggle('is-active',b.dataset.view===v)); if(v==='roomsView')renderRooms();if(v==='recordsView'){renderSessions();renderRecords();}window.scrollTo({top:0,behavior:'smooth'});}
 
-  function activeClass() {
-    return state.classes.find(item => item.id === state.activeClassId) || state.classes[0];
+  function openStudent(sid=''){const s=state.students.find(x=>x.id===sid);$('#studentForm').reset();$('#studentId').value=s?.id||'';$('#studentDialogTitle').textContent=s?'編輯學員':'新增學員';$('#studentName').value=s?.name||'';$('#studentClass').value=s?.classId||state.activeClassId;$('#studentRemaining').value=s?.remaining??8;$('#studentNote').value=s?.note||'';$('#deleteStudentButton').hidden=!s;$('#studentDialog').showModal();}
+  function openRenew(sid){const s=state.students.find(x=>x.id===sid);if(!s)return;$('#renewForm').reset();$('#renewStudentId').value=s.id;$('#renewStudentName').textContent=`${s.name} · 目前剩餘 ${s.remaining} 堂`;$('#renewDialog').showModal();}
+  function openRoom(rid=''){const r=room(rid);$('#roomForm').reset();$('#roomId').value=r?.id||'';$('#roomDialogTitle').textContent=r?'編輯教室':'新增教室';$('#roomName').value=r?.name||'';$('#roomLocation').value=r?.location||'';$('#roomNote').value=r?.note||'';$('#deleteRoomButton').hidden=!r;$('#roomDialog').showModal();}
+  function openRoomDetail(rid){const r=room(rid);if(!r)return;roomDetailId=rid;const cs=state.classes.filter(c=>c.roomId===rid), ids=cs.map(c=>c.id), ss=state.students.filter(s=>ids.includes(s.classId)), logs=state.sessions.filter(s=>s.roomId===rid).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);$('#roomDetailTitle').textContent=r.name;$('#roomDetailLocation').textContent=r.location||r.note||'尚未填寫教室資訊';$('#roomDetailContent').innerHTML=`<section class="room-detail-section"><h3>班別與學生</h3>${cs.map(c=>`<div class="compact-row"><span>${esc(c.name)}</span><strong>${state.students.filter(s=>s.classId===c.id).length} 人</strong></div>`).join('')||'<span class="muted-text">尚無班別</span>'}</section><section class="room-detail-section"><h3>學生名單</h3>${ss.map(s=>`<div class="compact-row"><span>${esc(s.name)} · ${esc(cls(s.classId)?.name||'')}</span><strong class="remaining${s.remaining<=0?' is-empty':''}">${s.remaining} 堂</strong></div>`).join('')||'<span class="muted-text">尚無學生</span>'}</section><section class="room-detail-section"><h3>最近課堂</h3>${logs.map(s=>`<button class="compact-row text-button" data-session-id="${esc(s.id)}"><span>${s.date} · ${esc(cls(s.classId)?.name||'')}</span><span>${s.students.filter(a=>a.present).length}/${s.students.length} 人</span></button>`).join('')||'<span class="muted-text">尚無課堂紀錄</span>'}</section>`;$('#roomDetailDialog').showModal();}
+  const wasPresent=(sid,cid,date)=>state.records.some(r=>r.studentId===sid&&r.classId===cid&&r.type==='checkin'&&localDate(r.createdAt)===date);
+  function renderSessionStudents(cid,existing=[]){const cur=state.students.filter(s=>s.classId===cid), known=new Set(cur.map(s=>s.id)), list=[...cur.map(s=>({studentId:s.id,name:s.name,present:wasPresent(s.id,cid,$('#sessionDate').value),condition:''})),...existing.filter(a=>!known.has(a.studentId))], map=new Map(existing.map(a=>[a.studentId,a]));$('#sessionStudentList').innerHTML=list.map(a=>{const v=map.get(a.studentId)||a;return `<div class="session-student-row" data-session-student="${esc(a.studentId)}"><label><input type="checkbox" ${v.present?'checked':''}>出席</label><strong>${esc(v.name)}</strong><input type="text" maxlength="300" value="${esc(v.condition)}" placeholder="特殊狀況／個別紀錄"></div>`}).join('')||'<span class="muted-text">此班尚無學生</span>';}
+  function openSession(sid='',preset={}){const s=state.sessions.find(x=>x.id===sid), cid=s?.classId||preset.classId||state.activeClassId;$('#sessionForm').reset();$('#sessionId').value=s?.id||'';$('#sessionDialogTitle').textContent=s?'編輯課堂紀錄':'新增課堂紀錄';$('#sessionDate').value=s?.date||localDate();$('#sessionTime').value=s?.time||'';$('#sessionClass').value=cid;$('#sessionRoom').value=s?.roomId||preset.roomId||roomOfClass(cid).id;$('#sessionTraining').value=s?.training||'';$('#sessionMusic').value=s?.music||'';$('#sessionNote').value=s?.note||'';$('#deleteSessionButton').hidden=!s;renderSessionStudents(cid,s?.students||[]);$('#sessionDialog').showModal();}
+  function readSessionStudents(){return $$('#sessionStudentList [data-session-student]').map(row=>({studentId:row.dataset.sessionStudent,name:row.querySelector('strong').textContent,present:row.querySelector('[type=checkbox]').checked,condition:row.querySelector('[type=text]').value.trim()}));}
+  function addRecord(s,type,delta,note=''){const r={id:id('record'),studentId:s.id,classId:s.classId,studentName:s.name,type,delta,note,createdAt:new Date().toISOString()};state.records.push(r);return r;}
+  function checkIn(sid){const s=state.students.find(x=>x.id===sid);if(!s||s.remaining<=0||wasPresent(s.id,s.classId,localDate()))return;s.remaining--;const r=addRecord(s,'checkin',-1);save();renderStudents();renderRecords();clearInterval(undoTimer);undo={sid:s.id,rid:r.id,seconds:7};$('#snackbarText').textContent=`${s.name}已簽到，扣除 1 堂`;$('#undoCountdown').textContent='(7)';$('#snackbar').hidden=false;undoTimer=setInterval(()=>{if(!undo)return;undo.seconds--;$('#undoCountdown').textContent=undo.seconds?`(${undo.seconds})`:'';if(!undo.seconds){clearInterval(undoTimer);undo=null;$('#snackbar').hidden=true;}},1000);}
+  function renew(sid,n){const s=state.students.find(x=>x.id===sid),v=parseInt(n);if(!s||!v||v<1)return;s.remaining+=v;addRecord(s,'renew',v,`續卡 ${v} 堂`);save();$('#renewDialog').close();renderAll();}
+  function download(name,text,type){const u=URL.createObjectURL(new Blob([text],{type})),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}
+  function backup(){download(`Ren記事本-完整備份-${localDate()}.json`,JSON.stringify(state,null,2),'application/json');}
+  async function restore(file){try{const x=JSON.parse(await file.text());if(!x||!Array.isArray(x.classes)||!Array.isArray(x.students)||!Array.isArray(x.records))throw 0;state=migrate(x);save();renderAll();alert('備份已成功還原，舊版資料也已升級。');}catch{alert('無法讀取這份備份。');}$('#importBackupInput').value='';}
+
+  function bind(){
+    $('#classTabs').onclick=e=>{const b=e.target.closest('[data-class-id]');if(!b)return;state.activeClassId=b.dataset.classId;save();$('#studentSearch').value='';renderControls();renderStudents();}; $('#studentSearch').oninput=renderStudents;
+    $('#addStudentButton').onclick=()=>openStudent();$('#quickSessionButton').onclick=()=>openSession('',{classId:state.activeClassId});$('#addSessionButton').onclick=()=>openSession();
+    $('#studentList').onclick=e=>{const b=e.target.closest('[data-action]');if(!b)return;b.dataset.action==='edit'?openStudent(b.dataset.studentId):b.dataset.action==='renew'?openRenew(b.dataset.studentId):checkIn(b.dataset.studentId);};
+    $('#studentForm').onsubmit=e=>{e.preventDefault();const old=state.students.find(s=>s.id===$('#studentId').value),rem=Math.max(0,parseInt($('#studentRemaining').value)||0);if(old){const diff=rem-old.remaining;Object.assign(old,{name:$('#studentName').value.trim(),classId:$('#studentClass').value,remaining:rem,note:$('#studentNote').value.trim()});if(diff)addRecord(old,'adjust',diff,'手動調整堂數');}else state.students.push({id:id('student'),name:$('#studentName').value.trim(),classId:$('#studentClass').value,remaining:rem,note:$('#studentNote').value.trim()});save();$('#studentDialog').close();renderAll();};
+    $('#deleteStudentButton').onclick=()=>{const s=state.students.find(x=>x.id===$('#studentId').value);if(s&&confirm(`確定刪除「${s.name}」嗎？歷史紀錄會保留。`)){state.students=state.students.filter(x=>x.id!==s.id);save();$('#studentDialog').close();renderAll();}};
+    $$('.renew-options button').forEach(b=>b.onclick=()=>renew($('#renewStudentId').value,b.dataset.lessons));$('#renewForm').onsubmit=e=>{e.preventDefault();renew($('#renewStudentId').value,$('#customLessons').value);};
+    $('#undoButton').onclick=()=>{if(!undo)return;const s=state.students.find(x=>x.id===undo.sid);if(s)s.remaining++;state.records=state.records.filter(r=>r.id!==undo.rid);clearInterval(undoTimer);undo=null;$('#snackbar').hidden=true;save();renderAll();};
+    $$('.nav-button').forEach(b=>b.onclick=()=>showView(b.dataset.view));$$('[data-history-mode]').forEach(b=>b.onclick=()=>{$$('[data-history-mode]').forEach(x=>x.setAttribute('aria-selected',x===b));const s=b.dataset.historyMode==='sessions';$('#sessionHistoryPanel').hidden=!s;$('#attendanceHistoryPanel').hidden=s;});
+    $('#recordClassFilter').onchange=renderRecords;$('#recordTypeFilter').onchange=renderRecords;$('#sessionRoomFilter').onchange=renderSessions;$('#sessionClassFilter').onchange=renderSessions;
+    $('#roomGrid').onclick=e=>{const b=e.target.closest('[data-room-detail]');if(b)openRoomDetail(b.dataset.roomDetail);}; $('#addRoomButton').onclick=$('#settingsAddRoomButton').onclick=()=>openRoom();$('#roomManager').onclick=e=>{const b=e.target.closest('[data-edit-room]');if(b)openRoom(b.dataset.editRoom);};
+    $('#roomForm').onsubmit=e=>{e.preventDefault();const r=room($('#roomId').value),v={name:$('#roomName').value.trim(),location:$('#roomLocation').value.trim(),note:$('#roomNote').value.trim()};r?Object.assign(r,v):state.rooms.push({id:id('room'),...v});save();$('#roomDialog').close();renderAll();};
+    $('#deleteRoomButton').onclick=()=>{const r=room($('#roomId').value),n=state.classes.filter(c=>c.roomId===r?.id).length;if(!r)return;if(n)return alert(`請先把 ${n} 個班別移到其他教室。`);if(confirm(`確定刪除「${r.name}」嗎？`)){state.rooms=state.rooms.filter(x=>x.id!==r.id);save();$('#roomDialog').close();renderAll();}};
+    $('#editRoomFromDetailButton').onclick=()=>{$('#roomDetailDialog').close();openRoom(roomDetailId)};$('#addSessionFromRoomButton').onclick=()=>{const rid=roomDetailId,cid=state.classes.find(c=>c.roomId===rid)?.id||state.activeClassId;$('#roomDetailDialog').close();openSession('',{roomId:rid,classId:cid});};
+    $('#roomDetailContent').onclick=e=>{const b=e.target.closest('[data-session-id]');if(b){$('#roomDetailDialog').close();openSession(b.dataset.sessionId);}};$('#sessionList').onclick=e=>{const b=e.target.closest('[data-session-id]');if(b)openSession(b.dataset.sessionId);};
+    $('#sessionClass').onchange=()=>{$('#sessionRoom').value=roomOfClass($('#sessionClass').value).id;renderSessionStudents($('#sessionClass').value)};$('#sessionDate').onchange=()=>{if(!$('#sessionId').value)renderSessionStudents($('#sessionClass').value)};
+    $('#copyLastSessionButton').onclick=()=>{const p=state.sessions.filter(s=>s.classId===$('#sessionClass').value&&s.id!==$('#sessionId').value).sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time))[0];if(!p)return alert('這個班別還沒有上一堂紀錄。');$('#sessionTraining').value=p.training;$('#sessionMusic').value=p.music;$('#sessionNote').value=p.note;};
+    $('#sessionForm').onsubmit=e=>{e.preventDefault();const v={id:$('#sessionId').value||id('session'),classId:$('#sessionClass').value,roomId:$('#sessionRoom').value,date:$('#sessionDate').value,time:$('#sessionTime').value,training:$('#sessionTraining').value.trim(),music:$('#sessionMusic').value.trim(),note:$('#sessionNote').value.trim(),students:readSessionStudents(),updatedAt:new Date().toISOString()},i=state.sessions.findIndex(s=>s.id===v.id);i<0?state.sessions.push(v):state.sessions[i]=v;save();$('#sessionDialog').close();renderAll();showView('recordsView');};
+    $('#deleteSessionButton').onclick=()=>{const s=state.sessions.find(x=>x.id===$('#sessionId').value);if(s&&confirm(`確定刪除 ${s.date} 的課堂紀錄嗎？`)){state.sessions=state.sessions.filter(x=>x.id!==s.id);save();$('#sessionDialog').close();renderAll();}};
+    $('#addClassForm').onsubmit=e=>{e.preventDefault();const n=$('#newClassName').value.trim();if(!n)return;const c={id:id('class'),name:n,roomId:state.rooms[0].id};state.classes.push(c);state.activeClassId=c.id;$('#newClassName').value='';save();renderAll();};
+    $('#classManager').onchange=e=>{const s=e.target.closest('[data-class-room]'),c=s&&cls(s.dataset.classRoom);if(c){c.roomId=s.value;save();renderRooms();}};$('#classManager').onclick=e=>{const b=e.target.closest('[data-delete-class]');if(!b||state.classes.length<2)return;const c=cls(b.dataset.deleteClass),n=state.students.filter(s=>s.classId===c.id).length;if(confirm(`確定刪除「${c.name}」嗎？${n?`此班 ${n} 位學員也會刪除，歷史紀錄會保留。`:''}`)){state.classes=state.classes.filter(x=>x.id!==c.id);state.students=state.students.filter(x=>x.classId!==c.id);if(state.activeClassId===c.id)state.activeClassId=state.classes[0].id;save();renderAll();}};
+    $('#exportCsvButton').onclick=()=>{const rows=[['時間','班別','學員','類型','堂數變動','備註'],...state.records.map(r=>[dtf.format(new Date(r.createdAt)),cls(r.classId)?.name||'已刪除班別',r.studentName,typeName[r.type],r.delta,r.note])],csv='\ufeff'+rows.map(row=>row.map(x=>`"${String(x??'').replace(/"/g,'""')}"`).join(',')).join('\r\n');download(`Ren記事本-點名紀錄-${localDate()}.csv`,csv,'text/csv;charset=utf-8');};
+    $('#exportBackupButton').onclick=backup;$('#importBackupInput').onchange=e=>restore(e.target.files[0]);$('#resetButton').onclick=()=>{if(confirm('確定清除所有資料嗎？這個動作不能復原。')){state=emptyState();save();renderAll();showView('rollcallView');}};
+    $$('[data-close]').forEach(b=>b.onclick=()=>$('#'+b.dataset.close).close());window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;$('#installButton').hidden=false});$('#installButton').onclick=async()=>{if(installPrompt){installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;$('#installButton').hidden=true;}};
   }
-
-  function renderAll() {
-    renderClassControls();
-    renderStudents();
-    renderRecords();
-    renderClassManager();
-  }
-
-  function renderClassControls() {
-    elements.classTabs.innerHTML = state.classes.map(item => `
-      <button class="class-tab" type="button" role="tab" aria-selected="${item.id === state.activeClassId}" data-class-id="${escapeHtml(item.id)}">${escapeHtml(item.name)}</button>
-    `).join('');
-
-    const options = state.classes.map(item => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name)}</option>`).join('');
-    elements.studentClass.innerHTML = options;
-    const previousFilter = elements.recordClassFilter.value || 'all';
-    elements.recordClassFilter.innerHTML = `<option value="all">全部班別</option>${options}`;
-    elements.recordClassFilter.value = previousFilter === 'all' || state.classes.some(item => item.id === previousFilter) ? previousFilter : 'all';
-  }
-
-  function todayKey(dateLike) {
-    const date = new Date(dateLike);
-    return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-  }
-
-  function renderStudents() {
-    const query = elements.studentSearch.value.trim().toLocaleLowerCase('zh-Hant');
-    const students = state.students
-      .filter(item => item.classId === state.activeClassId)
-      .filter(item => !query || item.name.toLocaleLowerCase('zh-Hant').includes(query))
-      .sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
-    const checkedToday = new Set(state.records
-      .filter(item => item.classId === state.activeClassId && item.type === 'checkin' && todayKey(item.createdAt) === todayKey(new Date()))
-      .map(item => item.studentId));
-
-    elements.attendanceSummary.textContent = `${activeClass().name} · ${checkedToday.size} / ${state.students.filter(item => item.classId === state.activeClassId).length} 人已到`;
-    elements.studentEmpty.hidden = students.length > 0;
-    elements.studentList.innerHTML = students.map(student => {
-      const isEmpty = student.remaining <= 0;
-      const isChecked = checkedToday.has(student.id);
-      const initial = escapeHtml(student.name.slice(0, 1));
-      return `
-        <article class="student-card${isEmpty ? ' is-empty' : ''}">
-          <button class="student-info-button" type="button" data-action="edit" data-student-id="${escapeHtml(student.id)}" aria-label="編輯 ${escapeHtml(student.name)}">
-            <span class="avatar" aria-hidden="true">${initial}</span>
-            <span>
-              <span class="student-name">${escapeHtml(student.name)}</span>
-              <span class="student-meta">剩餘 <span class="remaining${isEmpty ? ' is-empty' : ''}">${student.remaining}</span> 堂${student.note ? ` · <span class="student-note">${escapeHtml(student.note)}</span>` : ''}</span>
-            </span>
-          </button>
-          <div class="student-actions">
-            <button class="renew-button" type="button" data-action="renew" data-student-id="${escapeHtml(student.id)}">續卡</button>
-            <button class="checkin-button" type="button" data-action="checkin" data-student-id="${escapeHtml(student.id)}" ${isEmpty || isChecked ? 'disabled' : ''}>${isChecked ? '已簽到' : isEmpty ? '無堂數' : '簽到'}</button>
-          </div>
-        </article>`;
-    }).join('');
-  }
-
-  function renderRecords() {
-    const classId = elements.recordClassFilter.value || 'all';
-    const type = elements.recordTypeFilter.value || 'all';
-    const records = state.records
-      .filter(item => classId === 'all' || item.classId === classId)
-      .filter(item => type === 'all' || item.type === type)
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    elements.recordEmpty.hidden = records.length > 0;
-    elements.recordList.innerHTML = records.map(record => {
-      const className = state.classes.find(item => item.id === record.classId)?.name || '已刪除班別';
-      const mark = record.type === 'checkin' ? '✓' : record.type === 'renew' ? '+' : '↕';
-      const delta = record.delta > 0 ? `＋${record.delta}` : String(record.delta);
-      return `<article class="record-item">
-        <span class="record-mark is-${record.type}" aria-hidden="true">${mark}</span>
-        <div><div class="record-title">${escapeHtml(record.studentName)} · ${TYPE_LABELS[record.type]}</div><div class="record-detail">${escapeHtml(className)}${record.note ? ` · ${escapeHtml(record.note)}` : ''}</div><div class="record-time">${dateFormatter.format(new Date(record.createdAt))}</div></div>
-        <span class="record-delta${record.delta < 0 ? ' is-negative' : ''}">${delta} 堂</span>
-      </article>`;
-    }).join('');
-  }
-
-  function renderClassManager() {
-    elements.classManager.innerHTML = state.classes.map(item => {
-      const count = state.students.filter(student => student.classId === item.id).length;
-      return `<div class="class-row"><span>${escapeHtml(item.name)} <small>（${count} 人）</small></span><button type="button" data-delete-class="${escapeHtml(item.id)}" ${state.classes.length === 1 ? 'disabled' : ''}>刪除</button></div>`;
-    }).join('');
-  }
-
-  function showView(viewId) {
-    document.querySelectorAll('.view').forEach(view => {
-      const active = view.id === viewId;
-      view.hidden = !active;
-      view.classList.toggle('is-active', active);
-    });
-    document.querySelectorAll('.nav-button').forEach(button => button.classList.toggle('is-active', button.dataset.view === viewId));
-    if (viewId === 'recordsView') renderRecords();
-    if (viewId === 'settingsView') renderClassManager();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-
-  function openStudentDialog(studentId = '') {
-    const student = state.students.find(item => item.id === studentId);
-    elements.studentForm.reset();
-    elements.studentId.value = student?.id || '';
-    elements.studentDialogTitle.textContent = student ? '編輯學員' : '新增學員';
-    elements.studentName.value = student?.name || '';
-    elements.studentClass.value = student?.classId || state.activeClassId;
-    elements.studentRemaining.value = student?.remaining ?? 8;
-    elements.studentNote.value = student?.note || '';
-    elements.deleteStudentButton.hidden = !student;
-    elements.studentDialog.showModal();
-    requestAnimationFrame(() => elements.studentName.focus());
-  }
-
-  function openRenewDialog(studentId) {
-    const student = state.students.find(item => item.id === studentId);
-    if (!student) return;
-    elements.renewForm.reset();
-    elements.renewStudentId.value = student.id;
-    elements.renewStudentName.textContent = `${student.name} · 目前剩餘 ${student.remaining} 堂`;
-    elements.renewDialog.showModal();
-  }
-
-  function addRecord(student, type, delta, note = '') {
-    const record = { id: uid('record'), studentId: student.id, classId: student.classId, studentName: student.name, type, delta, note, createdAt: new Date().toISOString() };
-    state.records.push(record);
-    return record;
-  }
-
-  function checkIn(studentId) {
-    const student = state.students.find(item => item.id === studentId);
-    if (!student || student.remaining <= 0) return;
-    const wasAlreadyChecked = state.records.some(item => item.studentId === student.id && item.type === 'checkin' && todayKey(item.createdAt) === todayKey(new Date()));
-    if (wasAlreadyChecked) return;
-
-    student.remaining -= 1;
-    const record = addRecord(student, 'checkin', -1);
-    saveState();
-    renderStudents();
-    renderRecords();
-    startUndo(student, record);
-  }
-
-  function startUndo(student, record) {
-    clearInterval(undoTimer);
-    undoState = { studentId: student.id, recordId: record.id, seconds: 7 };
-    elements.snackbarText.textContent = `${student.name}已簽到，扣除 1 堂`;
-    elements.undoCountdown.textContent = `(${undoState.seconds})`;
-    elements.snackbar.hidden = false;
-    undoTimer = setInterval(() => {
-      if (!undoState) return;
-      undoState.seconds -= 1;
-      elements.undoCountdown.textContent = undoState.seconds > 0 ? `(${undoState.seconds})` : '';
-      if (undoState.seconds <= 0) clearUndo();
-    }, 1000);
-  }
-
-  function clearUndo() {
-    clearInterval(undoTimer);
-    undoTimer = null;
-    undoState = null;
-    elements.snackbar.hidden = true;
-  }
-
-  function undoCheckIn() {
-    if (!undoState) return;
-    const student = state.students.find(item => item.id === undoState.studentId);
-    if (student) student.remaining += 1;
-    state.records = state.records.filter(item => item.id !== undoState.recordId);
-    saveState();
-    clearUndo();
-    renderStudents();
-    renderRecords();
-  }
-
-  function renewStudent(studentId, lessons) {
-    const student = state.students.find(item => item.id === studentId);
-    const amount = Number.parseInt(lessons, 10);
-    if (!student || !Number.isInteger(amount) || amount <= 0) return;
-    student.remaining += amount;
-    addRecord(student, 'renew', amount, `續卡 ${amount} 堂`);
-    saveState();
-    elements.renewDialog.close();
-    renderStudents();
-    renderRecords();
-  }
-
-  function downloadFile(filename, content, type) {
-    const blob = new Blob([content], { type });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }
-
-  function exportCsv() {
-    const rows = [['時間', '班別', '學員', '類型', '堂數變動', '備註']];
-    [...state.records].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).forEach(record => {
-      rows.push([
-        dateFormatter.format(new Date(record.createdAt)),
-        state.classes.find(item => item.id === record.classId)?.name || '已刪除班別',
-        record.studentName, TYPE_LABELS[record.type], record.delta, record.note
-      ]);
-    });
-    const csv = '\ufeff' + rows.map(row => row.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
-    downloadFile(`有氧點名紀錄-${new Date().toISOString().slice(0, 10)}.csv`, csv, 'text/csv;charset=utf-8');
-  }
-
-  function exportBackup() {
-    downloadFile(`有氧點名機備份-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(state, null, 2), 'application/json');
-  }
-
-  async function importBackup(file) {
-    if (!file) return;
-    try {
-      const candidate = JSON.parse(await file.text());
-      if (!isValidState(candidate)) throw new Error('invalid');
-      state = normalizeState(candidate);
-      saveState();
-      renderAll();
-      alert('備份已成功還原。');
-    } catch {
-      alert('無法讀取這份備份，請確認檔案格式正確。');
-    } finally {
-      document.querySelector('#importBackupInput').value = '';
-    }
-  }
-
-  function bindEvents() {
-    elements.classTabs.addEventListener('click', event => {
-      const button = event.target.closest('[data-class-id]');
-      if (!button) return;
-      state.activeClassId = button.dataset.classId;
-      saveState();
-      elements.studentSearch.value = '';
-      renderClassControls();
-      renderStudents();
-    });
-
-    elements.studentSearch.addEventListener('input', renderStudents);
-    document.querySelector('#addStudentButton').addEventListener('click', () => openStudentDialog());
-
-    elements.studentList.addEventListener('click', event => {
-      const button = event.target.closest('[data-action]');
-      if (!button) return;
-      const { action, studentId } = button.dataset;
-      if (action === 'edit') openStudentDialog(studentId);
-      if (action === 'renew') openRenewDialog(studentId);
-      if (action === 'checkin') checkIn(studentId);
-    });
-
-    elements.studentForm.addEventListener('submit', event => {
-      event.preventDefault();
-      const id = elements.studentId.value;
-      const remaining = Math.max(0, Number.parseInt(elements.studentRemaining.value, 10) || 0);
-      const existing = state.students.find(item => item.id === id);
-      if (existing) {
-        const difference = remaining - existing.remaining;
-        existing.name = elements.studentName.value.trim();
-        existing.classId = elements.studentClass.value;
-        existing.note = elements.studentNote.value.trim();
-        existing.remaining = remaining;
-        if (difference !== 0) addRecord(existing, 'adjust', difference, '手動調整堂數');
-      } else {
-        state.students.push({ id: uid('student'), name: elements.studentName.value.trim(), classId: elements.studentClass.value, remaining, note: elements.studentNote.value.trim() });
-      }
-      saveState();
-      elements.studentDialog.close();
-      renderAll();
-    });
-
-    elements.deleteStudentButton.addEventListener('click', () => {
-      const student = state.students.find(item => item.id === elements.studentId.value);
-      if (!student || !confirm(`確定刪除「${student.name}」嗎？過去的點名紀錄會保留。`)) return;
-      state.students = state.students.filter(item => item.id !== student.id);
-      saveState();
-      elements.studentDialog.close();
-      renderAll();
-    });
-
-    document.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', () => document.querySelector(`#${button.dataset.close}`).close()));
-    document.querySelectorAll('.renew-options button').forEach(button => button.addEventListener('click', () => renewStudent(elements.renewStudentId.value, button.dataset.lessons)));
-    elements.renewForm.addEventListener('submit', event => {
-      event.preventDefault();
-      if (!elements.customLessons.value) {
-        elements.customLessons.focus();
-        return;
-      }
-      renewStudent(elements.renewStudentId.value, elements.customLessons.value);
-    });
-
-    document.querySelector('#undoButton').addEventListener('click', undoCheckIn);
-    document.querySelectorAll('.nav-button').forEach(button => button.addEventListener('click', () => showView(button.dataset.view)));
-    elements.recordClassFilter.addEventListener('change', renderRecords);
-    elements.recordTypeFilter.addEventListener('change', renderRecords);
-    document.querySelector('#exportCsvButton').addEventListener('click', exportCsv);
-    document.querySelector('#exportBackupButton').addEventListener('click', exportBackup);
-    document.querySelector('#importBackupInput').addEventListener('change', event => importBackup(event.target.files[0]));
-
-    document.querySelector('#addClassForm').addEventListener('submit', event => {
-      event.preventDefault();
-      const input = document.querySelector('#newClassName');
-      const name = input.value.trim();
-      if (!name) return;
-      const classItem = { id: uid('class'), name };
-      state.classes.push(classItem);
-      state.activeClassId = classItem.id;
-      input.value = '';
-      saveState();
-      renderAll();
-    });
-
-    elements.classManager.addEventListener('click', event => {
-      const button = event.target.closest('[data-delete-class]');
-      if (!button || state.classes.length <= 1) return;
-      const classItem = state.classes.find(item => item.id === button.dataset.deleteClass);
-      const studentCount = state.students.filter(item => item.classId === classItem.id).length;
-      if (!confirm(`確定刪除「${classItem.name}」嗎？${studentCount ? `此班的 ${studentCount} 位學員也會刪除。` : ''}`)) return;
-      state.classes = state.classes.filter(item => item.id !== classItem.id);
-      state.students = state.students.filter(item => item.classId !== classItem.id);
-      if (state.activeClassId === classItem.id) state.activeClassId = state.classes[0].id;
-      saveState();
-      renderAll();
-    });
-
-    document.querySelector('#resetButton').addEventListener('click', () => {
-      if (!confirm('確定清除所有班別、學員與點名紀錄嗎？這個動作不能復原。')) return;
-      state = createEmptyState();
-      saveState();
-      renderAll();
-      showView('rollcallView');
-    });
-
-    window.addEventListener('beforeinstallprompt', event => {
-      event.preventDefault();
-      deferredInstallPrompt = event;
-      elements.installButton.hidden = false;
-    });
-    elements.installButton.addEventListener('click', async () => {
-      if (!deferredInstallPrompt) return;
-      deferredInstallPrompt.prompt();
-      await deferredInstallPrompt.userChoice;
-      deferredInstallPrompt = null;
-      elements.installButton.hidden = true;
-    });
-  }
-
-  function initialize() {
-    elements.todayLabel.textContent = new Intl.DateTimeFormat('zh-TW', { month: 'long', day: 'numeric', weekday: 'long' }).format(new Date());
-    bindEvents();
-    renderAll();
-    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-      window.addEventListener('load', () => navigator.serviceWorker.register('./service-worker.js').catch(() => {}));
-    }
-  }
-
-  initialize();
+  $('#todayLabel').textContent=new Intl.DateTimeFormat('zh-TW',{month:'long',day:'numeric',weekday:'long'}).format(new Date()); save(); bind(); renderAll(); if('serviceWorker'in navigator&&location.protocol!=='file:')window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch(()=>{}));
 })();

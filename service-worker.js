@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aerobic-rollcall-v1.0.0';
+const CACHE_NAME = 'ren-notebook-v2.0.0';
 const APP_SHELL = [
   './',
   './index.html',
