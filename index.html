@@ -10,7 +10,7 @@
   <title>Ren的記事本本</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=2.2.0">
+  <link rel="stylesheet" href="./styles.css?v=2.3.0">
 </head>
 <body>
   <div class="app-shell">
@@ -52,32 +52,28 @@
 
       <section class="view" id="roomsView" aria-labelledby="roomsTitle" hidden>
         <div class="section-heading">
-          <div><h2 id="roomsTitle">教室總覽</h2><p>點卡片查看該教室的班別、課堂與學生</p></div>
-          <button class="primary-button" id="addRoomButton" type="button">＋ 新增教室</button>
+          <div><h2 id="roomsTitle">教室與記事</h2><p>在同一頁管理教室、寫課堂記事及查看歷史</p></div>
+          <div class="section-actions">
+            <button class="secondary-button" id="addRoomButton" type="button">＋ 教室</button>
+            <button class="primary-button" id="addSessionButton" type="button">＋ 課堂記事</button>
+          </div>
         </div>
         <div class="room-grid" id="roomGrid"></div>
-      </section>
 
-      <section class="view" id="recordsView" aria-labelledby="recordsTitle" hidden>
-        <div class="section-heading">
-          <div><h2 id="recordsTitle">歷史紀錄</h2><p>課堂記事、點名與續卡都會保留</p></div>
-          <button class="primary-button" id="addSessionButton" type="button">＋ 課堂紀錄</button>
+        <div class="section-heading history-heading">
+          <div><h2 id="recordsTitle">歷史紀錄</h2><p>課堂記事、點名與續卡都集中在這裡</p></div>
         </div>
         <div class="history-tabs" role="tablist" aria-label="紀錄類型">
           <button type="button" role="tab" aria-selected="true" data-history-mode="sessions">課堂記事</button>
           <button type="button" role="tab" aria-selected="false" data-history-mode="attendance">點名紀錄</button>
         </div>
         <div id="sessionHistoryPanel">
-          <section class="quick-session-panel" aria-labelledby="quickSessionTitle">
-            <div><strong id="quickSessionTitle">要記哪個教室？</strong><span>點選教室，直接開始寫本堂記事</span></div>
-            <div class="quick-room-list" id="sessionRoomQuickList"></div>
-          </section>
           <div class="filter-row">
             <label>教室<select id="sessionRoomFilter"></select></label>
             <label>班別<select id="sessionClassFilter"></select></label>
           </div>
           <div class="session-list" id="sessionList"></div>
-          <div class="empty-state" id="sessionEmpty" hidden><strong>尚無課堂記事</strong><span>按「課堂紀錄」開始記下訓練、音樂與學生狀況。</span></div>
+          <div class="empty-state" id="sessionEmpty" hidden><strong>尚無課堂記事</strong><span>按「課堂記事」開始記下訓練、音樂與學生狀況。</span></div>
         </div>
         <div id="attendanceHistoryPanel" hidden>
           <div class="filter-row">
@@ -131,8 +127,7 @@
 
     <nav class="bottom-nav" aria-label="主要功能">
       <button class="nav-button is-active" type="button" data-view="rollcallView"><span aria-hidden="true">✓</span>點名</button>
-      <button class="nav-button" type="button" data-view="roomsView"><span aria-hidden="true">▦</span>教室</button>
-      <button class="nav-button" type="button" data-view="recordsView"><span aria-hidden="true">≡</span>記事</button>
+      <button class="nav-button" type="button" data-view="roomsView"><span aria-hidden="true">▦</span>教室記事</button>
       <button class="nav-button" type="button" data-view="settingsView"><span aria-hidden="true">⚙</span>設定</button>
     </nav>
   </div>
@@ -154,6 +149,19 @@
     </form>
   </dialog>
 
+  <dialog id="studentHistoryDialog" class="wide-dialog">
+    <div class="dialog-content">
+      <div class="dialog-heading"><div><h2 id="studentHistoryTitle">學員紀錄</h2><p id="studentHistorySubtitle"></p></div><button class="close-button" type="button" data-close="studentHistoryDialog" aria-label="關閉">×</button></div>
+      <div class="student-history-summary" id="studentHistorySummary"></div>
+      <div>
+        <div class="dialog-section-heading"><h3>簽到與續卡紀錄</h3><span class="muted-text">最新紀錄在最上方</span></div>
+        <div class="record-list student-record-list" id="studentHistoryList"></div>
+        <div class="empty-state compact-empty" id="studentHistoryEmpty" hidden><strong>目前還沒有紀錄</strong><span>完成簽到或續卡後會顯示在這裡。</span></div>
+      </div>
+      <div class="dialog-actions student-history-actions"><button class="secondary-button" id="editStudentFromHistoryButton" type="button">編輯資料</button><span class="spacer"></span><button class="primary-button" id="renewStudentFromHistoryButton" type="button">續卡</button></div>
+    </div>
+  </dialog>
+
   <dialog id="roomDialog">
     <form id="roomForm" method="dialog">
       <div class="dialog-heading"><h2 id="roomDialogTitle">新增教室</h2><button class="close-button" type="button" data-close="roomDialog" aria-label="關閉">×</button></div>
@@ -165,11 +173,20 @@
     </form>
   </dialog>
 
+  <dialog id="classDialog">
+    <form id="classForm" method="dialog">
+      <div class="dialog-heading"><div><h2>新增班別</h2><p>新增後即可加入學員或寫課堂記事</p></div><button class="close-button" type="button" data-close="classDialog" aria-label="關閉">×</button></div>
+      <label>班別名稱<input id="className" required maxlength="24" placeholder="例如：週二早班"></label>
+      <label>所屬教室<select id="classRoom" required></select></label>
+      <div class="dialog-actions"><span class="spacer"></span><button class="secondary-button" type="button" data-close="classDialog">取消</button><button class="primary-button" type="submit">新增班別</button></div>
+    </form>
+  </dialog>
+
   <dialog id="roomDetailDialog" class="wide-dialog">
     <div class="dialog-content">
       <div class="dialog-heading"><div><h2 id="roomDetailTitle"></h2><p id="roomDetailLocation"></p></div><button class="close-button" type="button" data-close="roomDetailDialog" aria-label="關閉">×</button></div>
       <div id="roomDetailContent"></div>
-      <div class="dialog-actions"><button class="secondary-button" id="editRoomFromDetailButton" type="button">編輯教室</button><span class="spacer"></span><button class="primary-button" id="addSessionFromRoomButton" type="button">＋ 課堂紀錄</button></div>
+      <div class="dialog-actions room-detail-actions"><button class="secondary-button" id="editRoomFromDetailButton" type="button">編輯教室</button><button class="secondary-button" id="addClassFromRoomButton" type="button">＋ 班別</button><button class="secondary-button" id="addStudentFromRoomButton" type="button">＋ 學員</button><span class="spacer"></span><button class="primary-button" id="addSessionFromRoomButton" type="button">＋ 寫記事</button></div>
     </div>
   </dialog>
 
@@ -212,6 +229,6 @@
     <span id="snackbarText"></span><button id="undoButton" type="button">復原 <span id="undoCountdown"></span></button>
   </div>
 
-  <script src="./app.js?v=2.2.0"></script>
+  <script src="./app.js?v=2.3.0"></script>
 </body>
 </html>
