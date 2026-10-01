@@ -10,7 +10,7 @@
   <title>Ren的記事本本</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=2.4.0">
+  <link rel="stylesheet" href="./styles.css?v=2.5.0">
 </head>
 <body>
   <div class="app-shell">
@@ -42,7 +42,8 @@
           <span aria-hidden="true">⌕</span>
           <input id="studentSearch" type="search" placeholder="搜尋學員姓名" autocomplete="off">
         </label>
-        <p class="reorder-help">長按學員姓名後拖曳，即可調整點名順序</p>
+        <div class="reorder-toolbar"><p class="reorder-help">長按學員姓名即可進入排序模式</p><button class="text-button" id="startReorderButton" type="button">調整順序</button></div>
+        <div class="reorder-banner" id="reorderBanner" hidden><span>拖曳 ☰ 或使用上下箭頭調整順序</span><button class="primary-button" id="finishReorderButton" type="button">完成</button></div>
 
         <div class="student-list" id="studentList"></div>
         <div class="empty-state" id="studentEmpty" hidden>
@@ -225,12 +226,12 @@
       <input type="hidden" id="renewStudentId">
       <label>續卡日期<input id="renewDate" type="date" required></label>
       <p class="field-help" id="renewExpiryHelp"></p>
-      <div class="renew-options" role="group" aria-label="續卡堂數">
-        <button type="button" data-lessons="4">＋4 堂</button>
-        <button type="button" data-lessons="6">＋6 堂</button>
-        <button type="button" data-lessons="8">＋8 堂</button>
+      <div class="renew-options" role="group" aria-label="續卡期數">
+        <button type="button" data-periods="1">＋1期<br><small>6堂／2個月</small></button>
+        <button type="button" data-periods="2">＋2期<br><small>12堂／4個月</small></button>
+        <button type="button" data-periods="3">＋3期<br><small>18堂／6個月</small></button>
       </div>
-      <label>自訂堂數<input id="customLessons" type="number" min="1" max="999" inputmode="numeric" placeholder="輸入堂數"></label>
+      <label>自訂期數<input id="customPeriods" type="number" min="1" max="20" inputmode="numeric" placeholder="輸入期數；每期6堂、2個月"></label>
       <div class="dialog-actions"><span class="spacer"></span><button class="secondary-button" type="button" data-close="renewDialog">取消</button><button class="primary-button" type="submit">確認續卡</button></div>
     </form>
   </dialog>
@@ -240,8 +241,7 @@
       <div class="dialog-heading"><div><h2>學員請假</h2><p id="leaveStudentName"></p></div><button class="close-button" type="button" data-close="leaveDialog" aria-label="關閉">×</button></div>
       <input type="hidden" id="leaveStudentId">
       <label>請假日期<input id="leaveDate" type="date" required></label>
-      <label>有效期順延天數<input id="leaveExtensionDays" type="number" min="0" max="365" value="7" inputmode="numeric" required></label>
-      <p class="field-help">請假不扣堂數。一般每週一堂可順延 7 天；遇到特殊情況可以自行修改。</p>
+      <div class="leave-policy"><strong>本期可請假2次</strong><span id="leaveQuotaHelp">請假不扣堂數，也不延長兩個月有效期限。</span></div>
       <label>備註<textarea id="leaveNote" maxlength="120" rows="2" placeholder="例如：出國、身體不適（選填）"></textarea></label>
       <div class="dialog-actions"><span class="spacer"></span><button class="secondary-button" type="button" data-close="leaveDialog">取消</button><button class="primary-button" type="submit">確認請假</button></div>
     </form>
@@ -251,6 +251,6 @@
     <span id="snackbarText"></span><button id="undoButton" type="button">復原 <span id="undoCountdown"></span></button>
   </div>
 
-  <script src="./app.js?v=2.4.0"></script>
+  <script src="./app.js?v=2.5.0"></script>
 </body>
 </html>
