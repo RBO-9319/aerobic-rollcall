@@ -10,7 +10,7 @@
   <title>Ren的記事本本</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=2.3.0">
+  <link rel="stylesheet" href="./styles.css?v=2.4.0">
 </head>
 <body>
   <div class="app-shell">
@@ -42,6 +42,7 @@
           <span aria-hidden="true">⌕</span>
           <input id="studentSearch" type="search" placeholder="搜尋學員姓名" autocomplete="off">
         </label>
+        <p class="reorder-help">長按學員姓名後拖曳，即可調整點名順序</p>
 
         <div class="student-list" id="studentList"></div>
         <div class="empty-state" id="studentEmpty" hidden>
@@ -82,6 +83,7 @@
               <option value="all">全部</option>
               <option value="checkin">簽到</option>
               <option value="renew">續卡</option>
+              <option value="leave">請假</option>
               <option value="adjust">調整</option>
             </select></label>
           </div>
@@ -139,6 +141,11 @@
       <label>姓名<input id="studentName" required maxlength="30" autocomplete="off"></label>
       <label>班別<select id="studentClass" required></select></label>
       <label>剩餘堂數<input id="studentRemaining" required type="number" min="0" max="999" inputmode="numeric"></label>
+      <div class="form-grid membership-dates">
+        <label>報名日<input id="studentEnrolledAt" type="date"></label>
+        <label>有效期限<input id="studentExpiresAt" type="date"></label>
+      </div>
+      <button class="text-button date-helper-button" id="setTwoMonthExpiryButton" type="button">依報名日設定兩個月效期</button>
       <label>備註<textarea id="studentNote" maxlength="120" rows="3" placeholder="選填"></textarea></label>
       <div class="dialog-actions">
         <button class="danger-text-button" id="deleteStudentButton" type="button" hidden>刪除學員</button>
@@ -154,11 +161,12 @@
       <div class="dialog-heading"><div><h2 id="studentHistoryTitle">學員紀錄</h2><p id="studentHistorySubtitle"></p></div><button class="close-button" type="button" data-close="studentHistoryDialog" aria-label="關閉">×</button></div>
       <div class="student-history-summary" id="studentHistorySummary"></div>
       <div>
-        <div class="dialog-section-heading"><h3>簽到與續卡紀錄</h3><span class="muted-text">最新紀錄在最上方</span></div>
+        <div class="membership-status" id="studentMembershipStatus"></div>
+        <div class="dialog-section-heading"><h3>簽到、續卡與請假紀錄</h3><span class="muted-text">最新紀錄在最上方</span></div>
         <div class="record-list student-record-list" id="studentHistoryList"></div>
-        <div class="empty-state compact-empty" id="studentHistoryEmpty" hidden><strong>目前還沒有紀錄</strong><span>完成簽到或續卡後會顯示在這裡。</span></div>
+        <div class="empty-state compact-empty" id="studentHistoryEmpty" hidden><strong>目前還沒有紀錄</strong><span>完成簽到、續卡或請假後會顯示在這裡。</span></div>
       </div>
-      <div class="dialog-actions student-history-actions"><button class="secondary-button" id="editStudentFromHistoryButton" type="button">編輯資料</button><span class="spacer"></span><button class="primary-button" id="renewStudentFromHistoryButton" type="button">續卡</button></div>
+      <div class="dialog-actions student-history-actions"><button class="secondary-button" id="editStudentFromHistoryButton" type="button">編輯資料</button><button class="secondary-button" id="leaveStudentFromHistoryButton" type="button">請假</button><span class="spacer"></span><button class="primary-button" id="renewStudentFromHistoryButton" type="button">續卡</button></div>
     </div>
   </dialog>
 
@@ -215,6 +223,8 @@
     <form id="renewForm" method="dialog">
       <div class="dialog-heading"><div><h2>學員續卡</h2><p id="renewStudentName"></p></div><button class="close-button" type="button" data-close="renewDialog" aria-label="關閉">×</button></div>
       <input type="hidden" id="renewStudentId">
+      <label>續卡日期<input id="renewDate" type="date" required></label>
+      <p class="field-help" id="renewExpiryHelp"></p>
       <div class="renew-options" role="group" aria-label="續卡堂數">
         <button type="button" data-lessons="4">＋4 堂</button>
         <button type="button" data-lessons="6">＋6 堂</button>
@@ -225,10 +235,22 @@
     </form>
   </dialog>
 
+  <dialog id="leaveDialog">
+    <form id="leaveForm" method="dialog">
+      <div class="dialog-heading"><div><h2>學員請假</h2><p id="leaveStudentName"></p></div><button class="close-button" type="button" data-close="leaveDialog" aria-label="關閉">×</button></div>
+      <input type="hidden" id="leaveStudentId">
+      <label>請假日期<input id="leaveDate" type="date" required></label>
+      <label>有效期順延天數<input id="leaveExtensionDays" type="number" min="0" max="365" value="7" inputmode="numeric" required></label>
+      <p class="field-help">請假不扣堂數。一般每週一堂可順延 7 天；遇到特殊情況可以自行修改。</p>
+      <label>備註<textarea id="leaveNote" maxlength="120" rows="2" placeholder="例如：出國、身體不適（選填）"></textarea></label>
+      <div class="dialog-actions"><span class="spacer"></span><button class="secondary-button" type="button" data-close="leaveDialog">取消</button><button class="primary-button" type="submit">確認請假</button></div>
+    </form>
+  </dialog>
+
   <div class="snackbar" id="snackbar" role="status" aria-live="polite" hidden>
     <span id="snackbarText"></span><button id="undoButton" type="button">復原 <span id="undoCountdown"></span></button>
   </div>
 
-  <script src="./app.js?v=2.3.0"></script>
+  <script src="./app.js?v=2.4.0"></script>
 </body>
 </html>
