@@ -180,8 +180,19 @@
         <div class="record-list student-record-list" id="studentHistoryList"></div>
         <div class="empty-state compact-empty" id="studentHistoryEmpty" hidden><strong>目前還沒有紀錄</strong><span>完成簽到、續卡或請假後會顯示在這裡。</span></div>
       </div>
-      <div class="dialog-actions student-history-actions"><button class="secondary-button" id="editStudentFromHistoryButton" type="button">編輯資料</button><button class="secondary-button" id="leaveStudentFromHistoryButton" type="button">請假</button><span class="spacer"></span><button class="primary-button" id="renewStudentFromHistoryButton" type="button">續卡</button></div>
+      <div class="dialog-actions student-history-actions"><button class="secondary-button" id="editStudentFromHistoryButton" type="button">編輯資料</button><button class="secondary-button holiday-button" id="addHolidayFromHistoryButton" type="button">＋紅字休</button><button class="secondary-button" id="leaveStudentFromHistoryButton" type="button">請假</button><span class="spacer"></span><button class="primary-button" id="renewStudentFromHistoryButton" type="button">續卡</button></div>
     </div>
+  </dialog>
+
+  <dialog id="quickHolidayDialog">
+    <form id="quickHolidayForm" method="dialog">
+      <div class="dialog-heading"><div><h2>新增紅字休</h2><p id="quickHolidayStudentName"></p></div><button class="close-button" type="button" data-close="quickHolidayDialog" aria-label="關閉">×</button></div>
+      <input type="hidden" id="quickHolidayStudentId">
+      <label>停課日期<input id="quickHolidayDate" type="date" required></label>
+      <label>原因<input id="quickHolidayName" maxlength="40" value="紅字休" required></label>
+      <div class="leave-policy holiday-policy"><strong>確認後直接順延 7 天</strong><span id="quickHolidayHelp">這個班別在該日期有效的學員，都會一起順延一週；同一天不會重複延長。</span></div>
+      <div class="dialog-actions"><span class="spacer"></span><button class="secondary-button" type="button" data-close="quickHolidayDialog">取消</button><button class="primary-button" type="submit">確認順延</button></div>
+    </form>
   </dialog>
 
   <dialog id="roomDialog">
@@ -265,7 +276,7 @@
     <span id="snackbarText"></span><button id="undoButton" type="button">復原 <span id="undoCountdown"></span></button>
   </div>
 
-  <script src="./holidays.js?v=2.6.0"></script>
-  <script src="./app.js?v=2.6.0"></script>
+  <script src="./holidays.js?v=2.6.1"></script>
+  <script src="./app.js?v=2.6.1"></script>
 </body>
 </html>

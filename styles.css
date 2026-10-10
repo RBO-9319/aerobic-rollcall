@@ -224,7 +224,9 @@ dialog form { display: grid; gap: 15px; padding: 20px; }
 .student-history-summary span { color: var(--muted); font-size: 11px; }
 .student-record-list { max-height: 48vh; overflow-y: auto; margin-top: 7px; }
 .compact-empty { padding: 28px 12px; }
-.student-history-actions { position: sticky; bottom: -20px; margin: 0 -20px -20px; padding: 12px 20px 18px; border-top: 1px solid var(--line); background: rgba(255,253,247,.98); }
+.student-history-actions { position: sticky; bottom: -20px; flex-wrap: wrap; margin: 0 -20px -20px; padding: 12px 20px 18px; border-top: 1px solid var(--line); background: rgba(255,253,247,.98); }
+.holiday-button { border-color: #dfbd72; background: #fff3cc; color: #8a5a00; }
+.holiday-policy { border-color: #dfbd72; background: #fff7dd; color: #8a5a00; }
 .room-detail-actions { flex-wrap: wrap; }
 .membership-status { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 12px 0; padding: 12px; border: 1px solid var(--line); border-radius: 13px; background: var(--bg); }
 .membership-status > div { display: grid; gap: 3px; }
