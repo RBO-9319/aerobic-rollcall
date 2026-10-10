@@ -10,7 +10,7 @@
   <title>Ren的記事本本</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=2.5.0">
+  <link rel="stylesheet" href="./styles.css?v=2.6.0">
 </head>
 <body>
   <div class="app-shell">
@@ -95,7 +95,7 @@
       </section>
 
       <section class="view" id="settingsView" aria-labelledby="settingsTitle" hidden>
-        <div class="section-heading"><div><h2 id="settingsTitle">資料與設定</h2><p>班別、備份與還原</p></div></div>
+        <div class="section-heading"><div><h2 id="settingsTitle">資料與設定</h2><p>班別、紅字停課、備份與還原</p></div></div>
         <div class="settings-grid">
           <article class="settings-card">
             <h3>教室管理</h3>
@@ -110,6 +110,18 @@
               <input id="newClassName" required maxlength="24" placeholder="例如：週二早班">
               <button class="secondary-button" type="submit">新增</button>
             </form>
+          </article>
+          <article class="settings-card">
+            <h3>紅字與停課</h3>
+            <p>已內建行政院人事行政總處 2026、2027 年國定假日。只有假日撞到班別的固定上課日，效期才會自動順延 7 天。</p>
+            <form id="closureForm" class="closure-form">
+              <label>停課日期<input id="closureDate" type="date" required></label>
+              <label>套用班別<select id="closureClass" required><option value="all">所有符合星期的班別</option></select></label>
+              <label>原因<input id="closureName" maxlength="40" required placeholder="例如：颱風停課"></label>
+              <button class="secondary-button" type="submit">新增停課日</button>
+            </form>
+            <div id="closureList" class="closure-list"></div>
+            <p class="holiday-source">一般週六、週日不會自動停課；颱風假或臨時休課請在上方手動新增。</p>
           </article>
           <article class="settings-card">
             <h3>完整備份</h3>
@@ -144,9 +156,10 @@
       <label>剩餘堂數<input id="studentRemaining" required type="number" min="0" max="999" inputmode="numeric"></label>
       <div class="form-grid membership-dates">
         <label>報名日<input id="studentEnrolledAt" type="date"></label>
-        <label>有效期限<input id="studentExpiresAt" type="date"></label>
+        <label>原定有效期限<input id="studentExpiresAt" type="date"></label>
       </div>
       <button class="text-button date-helper-button" id="setTwoMonthExpiryButton" type="button">依報名日設定兩個月效期</button>
+      <p class="field-help" id="studentHolidayHelp">若期間遇到該班紅字停課，系統會自動往後順延。</p>
       <label>備註<textarea id="studentNote" maxlength="120" rows="3" placeholder="選填"></textarea></label>
       <div class="dialog-actions">
         <button class="danger-text-button" id="deleteStudentButton" type="button" hidden>刪除學員</button>
@@ -186,6 +199,7 @@
     <form id="classForm" method="dialog">
       <div class="dialog-heading"><div><h2>新增班別</h2><p>新增後即可加入學員或寫課堂記事</p></div><button class="close-button" type="button" data-close="classDialog" aria-label="關閉">×</button></div>
       <label>班別名稱<input id="className" required maxlength="24" placeholder="例如：週二早班"></label>
+      <label>固定上課日<select id="classWeekday" required><option value="">請選擇</option><option value="1">星期一</option><option value="2">星期二</option><option value="3">星期三</option><option value="4">星期四</option><option value="5">星期五</option><option value="6">星期六</option><option value="0">星期日</option></select></label>
       <label>所屬教室<select id="classRoom" required></select></label>
       <div class="dialog-actions"><span class="spacer"></span><button class="secondary-button" type="button" data-close="classDialog">取消</button><button class="primary-button" type="submit">新增班別</button></div>
     </form>
@@ -251,6 +265,7 @@
     <span id="snackbarText"></span><button id="undoButton" type="button">復原 <span id="undoCountdown"></span></button>
   </div>
 
-  <script src="./app.js?v=2.5.0"></script>
+  <script src="./holidays.js?v=2.6.0"></script>
+  <script src="./app.js?v=2.6.0"></script>
 </body>
 </html>

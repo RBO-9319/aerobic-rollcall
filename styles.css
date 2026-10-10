@@ -154,7 +154,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .class-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--line); }
 .class-row > span { display: inline-flex; align-items: baseline; gap: 4px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .class-row > span small { white-space: nowrap; }
-#classManager .class-row { display: grid; grid-template-columns: minmax(0, 1fr) 82px auto; gap: 6px; }
+#classManager .class-row { display: grid; grid-template-columns: minmax(90px, 1fr) minmax(100px, .8fr) minmax(82px, .8fr) auto; gap: 6px; }
 #classManager .class-row > span { font-size: 13px; }
 #classManager .class-row select { width: 100%; min-width: 0; padding: 8px 5px; font-size: 12px; }
 .class-row button { white-space: nowrap; }
@@ -162,6 +162,15 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); box-sh
 .class-row button { border: 0; background: transparent; color: var(--danger); cursor: pointer; }
 .inline-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; min-width: 0; }
 .inline-form input { min-width: 0; }
+.closure-form { display: grid; grid-template-columns: minmax(120px, .75fr) minmax(150px, 1fr) minmax(150px, 1fr) auto; gap: 8px; align-items: end; margin: 12px 0 14px; }
+.closure-form button { min-height: 42px; }
+.closure-list { display: grid; gap: 7px; }
+.closure-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.closure-row span { display: grid; gap: 3px; min-width: 0; }
+.closure-row strong { font-size: 13px; }
+.closure-row small { color: var(--muted); }
+.closure-row button { border: 0; background: transparent; color: var(--danger); cursor: pointer; }
+.holiday-source { margin: 12px 0 0 !important; font-size: 12px !important; }
 .button-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .file-button { display: inline-flex; width: auto; align-items: center; cursor: pointer; color: var(--text); font-size: inherit; }
 .file-button input { display: none; }
@@ -256,6 +265,9 @@ dialog form { display: grid; gap: 15px; padding: 20px; }
   .student-history-summary strong { font-size: 19px; }
   .room-detail-actions .spacer { display: none; }
   .room-detail-actions button { flex: 1 1 calc(50% - 8px); }
+  #classManager .class-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+  #classManager .class-row > span { grid-column: 1 / -1; }
+  .closure-form { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 380px) {
