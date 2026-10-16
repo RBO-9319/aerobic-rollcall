@@ -10,7 +10,7 @@
   <title>Ren的記事本本</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=2.6.0">
+  <link rel="stylesheet" href="./styles.css?v=2.7.0">
 </head>
 <body>
   <div class="app-shell">
@@ -26,7 +26,7 @@
       <section class="view is-active" id="rollcallView" aria-labelledby="rollcallTitle">
         <div class="section-heading">
           <div>
-            <h2 id="rollcallTitle">今日點名</h2>
+            <h2 id="rollcallTitle">課堂點名</h2>
             <p id="attendanceSummary">尚未點名</p>
           </div>
           <div class="section-actions">
@@ -36,6 +36,14 @@
         </div>
 
         <div class="class-tabs" id="classTabs" role="tablist" aria-label="班別"></div>
+        <div class="lesson-picker">
+          <div class="form-grid">
+            <label>本堂日期<input id="rollcallDate" type="date" required></label>
+            <label>上課時間<input id="rollcallTime" type="time" required></label>
+          </div>
+          <div class="button-row"><button class="secondary-button" id="previousLesson" type="button">‹ 前一週</button><button class="secondary-button" id="nextLesson" type="button">下一週 ›</button></div>
+          <p id="rollcallLessonHelp" role="status"></p>
+        </div>
 
         <label class="search-box">
           <span class="sr-only">搜尋學員</span>
@@ -146,6 +154,14 @@
       <button class="nav-button" type="button" data-view="settingsView"><span aria-hidden="true">⚙</span>設定</button>
     </nav>
   </div>
+
+  <dialog id="offDayCheckinDialog">
+    <div class="dialog-content">
+      <div class="dialog-heading"><h2>非當天簽到，是否確定？</h2><button class="close-button" type="button" data-close="offDayCheckinDialog" aria-label="關閉">×</button></div>
+      <p id="offDayCheckinText"></p>
+      <div class="dialog-actions"><span class="spacer"></span><button class="secondary-button" type="button" data-close="offDayCheckinDialog">取消</button><button class="primary-button" id="confirmOffDayCheckin" type="button">確定簽到</button></div>
+    </div>
+  </dialog>
 
   <dialog id="studentDialog">
     <form id="studentForm" method="dialog">
@@ -276,7 +292,7 @@
     <span id="snackbarText"></span><button id="undoButton" type="button">復原 <span id="undoCountdown"></span></button>
   </div>
 
-  <script src="./holidays.js?v=2.6.1"></script>
-  <script src="./app.js?v=2.6.1"></script>
+  <script src="./holidays.js?v=2.7.0"></script>
+  <script src="./app.js?v=2.7.0"></script>
 </body>
 </html>

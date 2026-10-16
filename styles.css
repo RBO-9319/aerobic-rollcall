@@ -290,3 +290,7 @@ dialog form { display: grid; gap: 15px; padding: 20px; }
 }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; scroll-behavior: auto !important; } }
+.lesson-picker { display:grid; gap:10px; padding:14px; margin-bottom:14px; border:1px solid var(--line); border-radius:14px; background:var(--surface-soft); }
+.lesson-picker input { width:100%; min-width:0; font-size:16px; }
+.lesson-picker p { margin:0; font-size:13px; line-height:1.6; color:var(--primary-dark); }
+#offDayCheckinText { margin:0; line-height:1.7; }
