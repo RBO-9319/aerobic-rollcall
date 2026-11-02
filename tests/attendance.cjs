@@ -28,7 +28,7 @@ const ctx = vm.createContext({
 const cut=source.lastIndexOf("  $('#todayLabel')");
 assert.ok(cut>0);
 vm.runInContext(source.slice(0,cut)+
-  'globalThis.api={get state(){return state},set state(x){state=x},bind,checkIn,migrate,selectedLesson,recordTimeText,renderStudents,applyBulkExtension,syncAllExpiries,renewalProjection};})();',ctx);
+  'globalThis.api={get state(){return state},set state(x){state=x},bind,checkIn,migrate,selectedLesson,recordTimeText,renderStudents,applyBulkExtension,cancelBulkExtension,syncAllExpiries,renewalProjection,renew,disableRendering:()=>{renderAll=()=>{}}};})();',ctx);
 const api=ctx.api;
 function fixture() {
   api.state={version:5,leavePolicyVersion:2,activeClassId:'fri',
@@ -95,40 +95,80 @@ assert.equal(api.state.records.length,0,'eligibility uses selected class date');
 console.log('PASS: backdated confirmation/cancel, class date/time, actual timestamp, duplicate/leave guards, migration, class selection persistence, same-day and expiry checks.');
 fixture();
 api.state.students.push(
-  {...api.state.students[0],id:'other',classId:'mon',name:'已過期學員',remaining:0,enrolledAt:'',baseExpiresAt:'2026-09-01',expiresAt:'2026-09-01'},
+  {...api.state.students[0],id:'other',classId:'mon',name:'另一班',remaining:0},
   {...api.state.students[0],id:'unset',name:'無期限',baseExpiresAt:'',expiresAt:''}
 );
-api.state.records.push({id:'old',studentId:'s',classId:'fri',studentName:'測試學生',type:'checkin',delta:-1,eventDate:'2026-10-01',createdAt:'2026-10-01T01:30:00.000Z',note:'保留紀錄'});
+api.state.records.push({id:'old',studentId:'s',classId:'fri',studentName:'測試學生',type:'checkin',delta:-1,eventDate:'2026-10-01',eventTime:'',createdAt:'2026-10-01T01:30:00.000Z',note:'保留紀錄'});
 const oldRecord=JSON.stringify(api.state.records[0]);
-const beforeExpiry=api.state.students[0].expiresAt;
-let result=api.applyBulkExtension('2026-10-15','颱風假');
-assert.equal(result.count,2);
+assert.ok(api.applyBulkExtension('2026-10-16','颱風假').error,'class is mandatory');
+let result=api.applyBulkExtension('2026-10-16','颱風假','fri');
+assert.equal(result.count,1);
 assert.equal(api.state.students[0].expiresAt,'2026-10-25');
-assert.equal(api.state.students[1].expiresAt,'2026-09-08');
+assert.equal(api.state.students[1].expiresAt,'2026-10-18','other class unchanged');
 assert.equal(api.state.students[2].expiresAt,'');
-assert.equal(api.state.students[0].baseExpiresAt,beforeExpiry);
 assert.equal(api.state.students[0].remaining,6);
 assert.equal(JSON.stringify(api.state.records[0]),oldRecord);
-assert.equal(api.state.records.filter(r=>r.type==='extension').length,2);
-assert.equal(api.state.records[1].delta,0);
-assert.match(api.state.records[1].note,/颱風假/);
-api.state=api.migrate(JSON.parse(saved));
-api.syncAllExpiries();
-assert.equal(api.state.students[0].expiresAt,'2026-10-25','reload must retain exactly seven days');
-assert.equal(api.state.students[1].expiresAt,'2026-09-08','missing enrollment still retains extension');
-assert.ok(api.applyBulkExtension('2026-10-15','老師事假').error,'same closure date cannot be applied twice');
-assert.equal(api.state.students[0].expiresAt,'2026-10-25');
-assert.equal(api.applyBulkExtension('2026-10-16','老師事假').count,2);
-assert.equal(api.state.students[0].expiresAt,'2026-11-01');
+const firstId=api.state.bulkExtensions[0].id;
+assert.ok(api.applyBulkExtension('2026-10-16','事假','fri').error);
+assert.equal(api.applyBulkExtension('2026-10-16','事假','mon').count,1,'another class same date allowed');
+assert.equal(api.applyBulkExtension('2026-10-23','事假','fri').count,1);
 api.state=api.migrate(JSON.parse(saved));api.syncAllExpiries();
 assert.equal(api.state.students[0].expiresAt,'2026-11-01');
-assert.equal(api.state.bulkExtensions.length,2);
-assert.equal(api.renewalProjection(api.state.students[0],'2026-10-25').manualExtensionDays,14,'active renewal carries extensions');
-assert.equal(api.renewalProjection(api.state.students[0],'2026-12-01').manualExtensionDays,0,'new expired term does not reuse old extension');
-const snapshot=JSON.stringify(api.state);
+assert.equal(api.cancelBulkExtension(firstId).count,1);
+assert.equal(api.state.students[0].expiresAt,'2026-10-25','only one batch reversed');
+assert.equal(api.state.students[1].expiresAt,'2026-10-25','other class extension preserved');
+assert.equal(JSON.stringify(api.state.records[0]),oldRecord);
+assert.equal(api.state.students[0].remaining,6);
+assert.equal(api.state.records.filter(r=>r.type==='extension_cancel').length,1);
+assert.ok(api.cancelBulkExtension(firstId).error,'cannot cancel twice');
+api.state=api.migrate(JSON.parse(saved));api.syncAllExpiries();
+assert.equal(api.state.students[0].expiresAt,'2026-10-25');
+assert.ok(api.state.bulkExtensions[0].cancelledAt);
+assert.equal(api.applyBulkExtension('2026-10-16','改正後','fri').count,1,'can reapply cancelled date');
+let snapshot=JSON.stringify(api.state);
 failSave=true;
-assert.ok(api.applyBulkExtension('2026-10-17','臨時停課').error);
+assert.ok(api.cancelBulkExtension(api.state.bulkExtensions.at(-1).id).error);
+assert.equal(JSON.stringify(api.state),snapshot);
+assert.ok(api.applyBulkExtension('2026-10-30','事假','fri').error);
+assert.equal(JSON.stringify(api.state),snapshot);
 failSave=false;
-assert.equal(JSON.stringify(api.state),snapshot,'failed save must not change data');
-assert.ok(api.applyBulkExtension('','颱風假').error);
-console.log('PASS: global +7 days, all classes, expired/zero balance, unset expiry skipped, repeat guard, audit logs, backup/reload, renewal, atomic storage failure.');
+
+// Real v2.8 backup structure: old all-class batch has no target IDs or student ledger.
+fixture();
+api.state.students.push({...api.state.students[0],id:'other',classId:'mon'});
+api.state.bulkExtensions=[{id:'legacy',date:'2026-10-16',reason:'颱風假',count:2,createdAt:'2026-10-19T02:00:00.000Z'}];
+api.state.students.forEach(s=>{
+  s.manualExtensionDays=7;s.expiresAt='2026-10-25';
+  api.state.records.push({id:'legacy-'+s.id,studentId:s.id,classId:s.classId,studentName:s.name,type:'extension',delta:0,eventDate:'2026-10-16',eventTime:'',createdAt:'2026-10-19T02:00:00.000Z',note:'全體順延 7 天'});
+});
+api.state=api.migrate(JSON.parse(JSON.stringify(api.state)));api.syncAllExpiries();
+assert.ok(api.applyBulkExtension('2026-10-16','事假','fri').error,'legacy all-class blocks duplicate');
+api.state.students[0].classId='mon'; // Moving classes must not hide the old contribution.
+assert.equal(api.cancelBulkExtension('legacy').count,2);
+assert.equal(api.state.students[0].expiresAt,'2026-10-18');
+assert.equal(api.state.students[1].expiresAt,'2026-10-18');
+assert.equal(api.state.records.filter(r=>r.type==='extension').length,2,'original audits retained');
+assert.equal(api.applyBulkExtension('2026-10-16','正確班級','mon').count,2);
+
+// Active renewal retains the contribution; an expired new term must not lose seven days.
+api.disableRendering();
+fixture();api.applyBulkExtension('2026-10-16','事假','fri');
+const activeBatch=api.state.bulkExtensions[0].id;
+node('#renewDate').value='2026-10-20';api.renew('s',1);
+const renewedExpiry=api.state.students[0].expiresAt;
+assert.equal(api.state.students[0].extensionBatchIds.length,1);
+assert.equal(api.cancelBulkExtension(activeBatch).count,1);
+assert.equal(api.state.students[0].remaining,12,'renewed lessons retained');
+assert.equal(api.state.students[0].expiresAt,'2026-12-18');
+assert.notEqual(api.state.students[0].expiresAt,renewedExpiry);
+fixture();api.applyBulkExtension('2026-10-16','事假','fri');
+const expiredBatch=api.state.bulkExtensions[0].id;
+node('#renewDate').value='2026-11-01';api.renew('s',1);
+assert.equal(api.state.students[0].extensionBatchIds.length,0);
+api.applyBulkExtension('2026-11-02','另一次','fri');
+api.state=api.migrate(JSON.parse(saved));api.syncAllExpiries();
+const newTermExpiry=api.state.students[0].expiresAt;
+assert.equal(api.cancelBulkExtension(expiredBatch).count,0);
+assert.equal(api.state.students[0].expiresAt,newTermExpiry,'must not subtract from new term');
+assert.equal(api.state.students[0].manualExtensionDays,7);
+console.log('PASS: class-only extension, class/date duplicate guards, precise cancellation, legacy global recovery, class moves, reload/backup, renewal safety and atomic save failures.');

@@ -1,10 +1,10 @@
-const CACHE_NAME = 'ren-notebook-v2.8.0';
+const CACHE_NAME = 'ren-notebook-v2.8.1';
 const APP_SHELL = [
   './',
   './index.html',
-  './styles.css?v=2.8.0',
-  './holidays.js?v=2.8.0',
-  './app.js?v=2.8.0',
+  './styles.css?v=2.8.1',
+  './holidays.js?v=2.8.1',
+  './app.js?v=2.8.1',
   './manifest.webmanifest',
   './icon.svg'
 ];

@@ -6,7 +6,7 @@
   const esc = s => String(s ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
   const id = p => `${p}-${crypto.randomUUID?.() || Date.now() + Math.random()}`;
   const localDate = (v = new Date()) => { const d = new Date(v); return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
-  const typeName = { checkin: '簽到', renew: '續卡', leave: '請假', adjust: '調整', extension: '全體順延' };
+  const typeName = { checkin: '簽到', renew: '續卡', leave: '請假', adjust: '調整', extension: '停課順延', extension_cancel: '撤銷延期' };
   const dtf = new Intl.DateTimeFormat('zh-TW', {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false});
   const validDate = value => /^\d{4}-\d{2}-\d{2}$/.test(String(value||''));
   const validTime = value => /^([01]\d|2[0-3]):[0-5]\d$/.test(String(value||''));
@@ -41,7 +41,7 @@
     const roomIds=new Set(rooms.map(r=>r.id)), fallback=rooms[0].id;
     const classes=x.classes.map(c=>{const inferred=inferWeekday(c.name),hasWeekday=c.weekday!==''&&c.weekday!=null&&Number.isInteger(Number(c.weekday))&&Number(c.weekday)>=0&&Number(c.weekday)<=6;return {id:String(c.id),name:String(c.name||'未命名班別').slice(0,24),roomId:roomIds.has(String(c.roomId))?String(c.roomId):fallback,weekday:hasWeekday?Number(c.weekday):inferred};});
     const state={version:5,leavePolicyVersion:Number(x.leavePolicyVersion)||1,activeClassId:String(x.activeClassId||classes[0].id),rooms,classes,
-      bulkExtensions:(Array.isArray(x.bulkExtensions)?x.bulkExtensions:[]).filter(b=>validDate(b.date)).map(b=>({id:String(b.id||id('bulk')),date:String(b.date),reason:String(b.reason||'全體停課').slice(0,80),count:Math.max(0,parseInt(b.count)||0),createdAt:String(b.createdAt||'')})),
+      bulkExtensions:(Array.isArray(x.bulkExtensions)?x.bulkExtensions:[]).filter(b=>validDate(b.date)).map(b=>({...b,id:String(b.id||id('bulk')),date:String(b.date),reason:String(b.reason||'全體停課').slice(0,80),count:Math.max(0,parseInt(b.count)||0),createdAt:String(b.createdAt||'')})),
       attendanceSelections:(Array.isArray(x.attendanceSelections)?x.attendanceSelections:[]).filter(a=>classes.some(c=>c.id===a.classId)).map(a=>({classId:a.classId,date:validDate(a.date)?a.date:'',time:validTime(a.time)?a.time:''})),
       students:x.students.map((s,index)=>{const expiry=validDate(s.expiresAt)?String(s.expiresAt):'',base=validDate(s.baseExpiresAt)?String(s.baseExpiresAt):expiry;return {id:String(s.id),classId:String(s.classId),name:String(s.name||'未命名').slice(0,30),remaining:Math.max(0,parseInt(s.remaining)||0),note:String(s.note||'').slice(0,120),enrolledAt:validDate(s.enrolledAt)?String(s.enrolledAt):'',baseExpiresAt:base,expiresAt:expiry,manualExtensionDays:extensionDays(s),order:Number.isFinite(Number(s.order))?Number(s.order):index};}),
       records:x.records.map(r=>({id:String(r.id),studentId:String(r.studentId||''),classId:String(r.classId||''),studentName:String(r.studentName||'未知學員'),type:typeName[r.type]?r.type:'adjust',delta:parseInt(r.delta)||0,eventDate:validDate(r.eventDate)?String(r.eventDate):localDate(r.createdAt||new Date()),eventTime:validTime(r.eventTime)?r.eventTime:'',createdAt:String(r.createdAt||new Date().toISOString()),note:String(r.note||'')})),
@@ -51,6 +51,15 @@
       state.students.forEach(s=>{const leaves=state.records.filter(r=>r.studentId===s.id&&r.type==='leave'),days=leaves.reduce((sum,r)=>sum+(Number(r.note.match(/有效期順延\s*(\d+)\s*天/)?.[1])||0),0);if(days&&s.expiresAt){s.expiresAt=addDays(s.expiresAt,-days);s.baseExpiresAt=addDays(s.baseExpiresAt,-days);}leaves.forEach(r=>{if(/有效期順延\s*\d+\s*天/.test(r.note)){r.note=r.note.replace(/(?:\s*·\s*)?有效期順延\s*\d+\s*天至\s*\d{4}\/\d{2}\/\d{2}/g,'').replace(/^\s*·\s*|\s*·\s*$/g,'').trim();r.note=[r.note,'固定效期不順延'].filter(Boolean).join(' · ');}});});
       state.leavePolicyVersion=2;
     }
+    // v2.8 batches had no student IDs. Recover only from their exact audit records,
+    // never from today's class roster, so old accidental all-class actions remain reversible.
+    state.bulkExtensions.forEach(b=>{
+      if(!Array.isArray(b.studentIds))b.studentIds=[...new Set(state.records.filter(r=>r.type==='extension'&&r.createdAt===b.createdAt&&r.eventDate===b.date).map(r=>r.studentId))];
+    });
+    state.students.forEach(s=>{
+      const original=x.students.find(v=>String(v.id)===s.id);
+      s.extensionBatchIds=Array.isArray(original?.extensionBatchIds)?[...original.extensionBatchIds]:state.bulkExtensions.filter(b=>!b.cancelledAt&&b.studentIds.includes(s.id)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).slice(0,Math.floor(extensionDays(s)/7)).map(b=>b.id);
+    });
     if(!classes.some(c=>c.id===state.activeClassId)) state.activeClassId=classes[0].id;
     return state;
   }
@@ -103,7 +112,7 @@
     const leaveToday=new Set(state.records.filter(r=>r.classId===state.activeClassId&&r.type==='leave'&&r.eventDate===lesson.date).map(r=>r.studentId));
     $('#attendanceSummary').textContent=`${cls(state.activeClassId).name} · ${present.size} / ${list.length} 人已到${leaveToday.size?` · ${leaveToday.size} 人請假`:''}`; $('#studentEmpty').hidden=!!shown.length;
     $('#studentList').classList.toggle('is-sort-mode',isSortMode);$('#reorderBanner').hidden=!isSortMode;$('#startReorderButton').hidden=isSortMode;
-    $('#studentList').innerHTML=shown.map((s,index)=>{const zero=s.remaining<=0, checked=present.has(s.id),onLeave=leaveToday.has(s.id),validity=membershipStatus(s),expired=outsideMembership(s,lesson.date),holiday=holidayExtensionDetails(s),holidayText=(holiday.days?` · 紅字順延 ${holiday.days/7} 週`:'')+(extensionDays(s)?` · 全體順延 ${extensionDays(s)} 天`:'');return `<article class="student-card${zero?' is-empty':''}${onLeave?' is-on-leave':''}" data-student-card="${esc(s.id)}"><button class="student-info-button" data-action="history" data-student-id="${esc(s.id)}" aria-label="查看 ${esc(s.name)} 的簽到、續卡與請假紀錄"><span class="avatar">${esc(s.name[0])}</span><span><span class="student-name">${esc(s.name)}</span><span class="student-meta">剩餘 <span class="remaining${zero?' is-empty':''}">${s.remaining}</span> 堂${s.note?` · ${esc(s.note)}`:''}</span><span class="student-validity is-${validity.key}">${esc(validity.text+holidayText)}</span><span class="student-history-hint">${isSortMode?'拖曳右側把手或按箭頭':'點姓名看紀錄 · 長按可排序 ›'}</span></span></button><div class="student-actions"><button class="renew-button" data-action="renew" data-student-id="${esc(s.id)}">續卡</button><button class="leave-button" data-action="leave" data-student-id="${esc(s.id)}" ${onLeave||checked?'disabled':''}>${onLeave?'已請假':'請假'}</button><button class="checkin-button" data-action="checkin" data-student-id="${esc(s.id)}" ${zero||checked||onLeave||expired?'disabled':''}>${checked?'已簽到':onLeave?'已請假':expired?'已過期':zero?'無堂數':'簽到'}</button></div><div class="reorder-controls"><button type="button" data-reorder-up="${esc(s.id)}" ${index===0?'disabled':''} aria-label="上移 ${esc(s.name)}">↑</button><button type="button" class="drag-handle" data-drag-handle="${esc(s.id)}" aria-label="拖曳 ${esc(s.name)}">☰</button><button type="button" data-reorder-down="${esc(s.id)}" ${index===shown.length-1?'disabled':''} aria-label="下移 ${esc(s.name)}">↓</button></div></article>`}).join('');
+    $('#studentList').innerHTML=shown.map((s,index)=>{const zero=s.remaining<=0, checked=present.has(s.id),onLeave=leaveToday.has(s.id),validity=membershipStatus(s),expired=outsideMembership(s,lesson.date),holiday=holidayExtensionDetails(s),holidayText=(holiday.days?` · 紅字順延 ${holiday.days/7} 週`:'')+(extensionDays(s)?` · 停課順延 ${extensionDays(s)} 天`:'');return `<article class="student-card${zero?' is-empty':''}${onLeave?' is-on-leave':''}" data-student-card="${esc(s.id)}"><button class="student-info-button" data-action="history" data-student-id="${esc(s.id)}" aria-label="查看 ${esc(s.name)} 的簽到、續卡與請假紀錄"><span class="avatar">${esc(s.name[0])}</span><span><span class="student-name">${esc(s.name)}</span><span class="student-meta">剩餘 <span class="remaining${zero?' is-empty':''}">${s.remaining}</span> 堂${s.note?` · ${esc(s.note)}`:''}</span><span class="student-validity is-${validity.key}">${esc(validity.text+holidayText)}</span><span class="student-history-hint">${isSortMode?'拖曳右側把手或按箭頭':'點姓名看紀錄 · 長按可排序 ›'}</span></span></button><div class="student-actions"><button class="renew-button" data-action="renew" data-student-id="${esc(s.id)}">續卡</button><button class="leave-button" data-action="leave" data-student-id="${esc(s.id)}" ${onLeave||checked?'disabled':''}>${onLeave?'已請假':'請假'}</button><button class="checkin-button" data-action="checkin" data-student-id="${esc(s.id)}" ${zero||checked||onLeave||expired?'disabled':''}>${checked?'已簽到':onLeave?'已請假':expired?'已過期':zero?'無堂數':'簽到'}</button></div><div class="reorder-controls"><button type="button" data-reorder-up="${esc(s.id)}" ${index===0?'disabled':''} aria-label="上移 ${esc(s.name)}">↑</button><button type="button" class="drag-handle" data-drag-handle="${esc(s.id)}" aria-label="拖曳 ${esc(s.name)}">☰</button><button type="button" data-reorder-down="${esc(s.id)}" ${index===shown.length-1?'disabled':''} aria-label="下移 ${esc(s.name)}">↓</button></div></article>`}).join('');
   }
   function renderRooms(){
     $('#roomGrid').innerHTML=state.rooms.map(r=>{const cs=state.classes.filter(c=>c.roomId===r.id), ids=cs.map(c=>c.id), ss=state.students.filter(s=>ids.includes(s.classId)), logs=state.sessions.filter(s=>s.roomId===r.id).sort((a,b)=>b.date.localeCompare(a.date));return `<article class="room-card"><button class="room-card-main" data-room-detail="${esc(r.id)}"><span class="room-card-header"><span><h3>${esc(r.name)}</h3><span class="room-location">${esc(r.location||'尚未填寫位置')}</span></span><span class="room-arrow">›</span></span><span class="room-stats"><span class="room-stat"><strong>${cs.length}</strong><span>班別</span></span><span class="room-stat"><strong>${ss.length}</strong><span>學生</span></span><span class="room-stat"><strong>${logs.length}</strong><span>課堂</span></span></span><span class="room-latest">${logs[0]?`最近：${esc(cls(logs[0].classId)?.name||'已刪除班別')} · ${logs[0].date}`:'尚無課堂紀錄'}</span></button><div class="room-card-actions"><button type="button" data-${cs.length?'room-session':'room-class'}="${esc(r.id)}">${cs.length?'＋ 直接寫記事':'＋ 先新增班別'}</button></div></article>`}).join('');
@@ -115,7 +124,7 @@
   }
   function renderRecords(){
     const cf=$('#recordClassFilter').value||'all', tf=$('#recordTypeFilter').value||'all'; const list=[...state.records].filter(r=>(cf==='all'||r.classId===cf)&&(tf==='all'||r.type===tf)).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)); $('#recordEmpty').hidden=!!list.length;
-    $('#recordList').innerHTML=list.map(r=>`<article class="record-item"><span class="record-mark is-${r.type}">${r.type==='checkin'?'✓':r.type==='renew'?'+':r.type==='leave'?'休':'↕'}</span><div><div class="record-title">${esc(r.studentName)} · ${typeName[r.type]}</div><div class="record-detail">${esc(cls(r.classId)?.name||'已刪除班別')}${r.note?' · '+esc(r.note):''}</div><div class="record-time">${esc(recordTimeText(r))}</div></div><span class="record-delta${r.delta<0?' is-negative':''}">${r.type==='extension'?'＋7 天':r.type==='leave'?'不扣堂':`${r.delta>0?'＋':''}${r.delta} 堂`}</span></article>`).join('');
+    $('#recordList').innerHTML=list.map(r=>`<article class="record-item"><span class="record-mark is-${r.type}">${r.type==='checkin'?'✓':r.type==='renew'?'+':r.type==='leave'?'休':'↕'}</span><div><div class="record-title">${esc(r.studentName)} · ${typeName[r.type]}</div><div class="record-detail">${esc(cls(r.classId)?.name||'已刪除班別')}${r.note?' · '+esc(r.note):''}</div><div class="record-time">${esc(recordTimeText(r))}</div></div><span class="record-delta${r.delta<0?' is-negative':''}">${r.type==='extension'?'＋7 天':r.type==='extension_cancel'?'－7 天':r.type==='leave'?'不扣堂':`${r.delta>0?'＋':''}${r.delta} 堂`}</span></article>`).join('');
   }
   function renderManagers(){
     $('#roomManager').innerHTML=state.rooms.map(r=>`<div class="class-row"><span>${esc(r.name)} <small>（${state.classes.filter(c=>c.roomId===r.id).length} 班）</small></span><button data-edit-room="${esc(r.id)}">編輯</button></div>`).join('');
@@ -123,41 +132,63 @@
   }
   function renderClosures(){const list=[...(state.closures||[])].sort((a,b)=>a.date.localeCompare(b.date));$('#closureList').innerHTML=list.length?list.map(c=>`<div class="closure-row"><span><strong>${displayDate(c.date)} · ${esc(c.name)}</strong><small>${esc(c.classId==='all'?'所有符合星期的班別':cls(c.classId)?.name||'已刪除班別')}</small></span><button type="button" data-delete-closure="${esc(c.id)}">刪除</button></div>`).join(''):'<span class="muted-text">目前沒有手動停課日</span>';}
   function renderBulkExtensions(){
-    const batches=[...(state.bulkExtensions||[])].sort((a,b)=>b.date.localeCompare(a.date));
-    $('#bulkExtensionList').innerHTML=batches.map(b=>`<div class="closure-row"><span><strong>${displayDate(b.date)} · ${esc(b.reason)}</strong><small>全體順延 7 天 · ${b.count} 位學員</small></span></div>`).join('');
+    const batches=[...(state.bulkExtensions||[])].reverse();
+    const html=batches.map(b=>`<div class="closure-row"><span><strong>${displayDate(b.date)} · ${esc(b.reason)}</strong><small>${esc(b.className||'舊版：所有班別')} · ${b.count} 位 · ${b.cancelledAt?'已撤銷':'順延 7 天'}</small></span>${b.cancelledAt?'':`<button type="button" data-cancel-extension="${esc(b.id)}">撤銷延期</button>`}</div>`).join('')||'<p class="field-help">尚無延期紀錄</p>';
+    $('#bulkExtensionList').innerHTML=$('#extensionHistoryList').innerHTML=html;
   }
-  function bulkExtensionTargets(store=state){return store.students.filter(s=>validDate(s.expiresAt));}
+  function bulkExtensionTargets(classId,store=state){return store.students.filter(s=>s.classId===classId&&validDate(s.expiresAt));}
   function openBulkExtension(){
-    $('#bulkExtensionForm').reset();$('#bulkExtensionDate').value=localDate();$('#bulkExtensionReason').value='颱風假';
-    const targets=bulkExtensionTargets(),missing=state.students.length-targets.length;
-    $('#bulkExtensionSummary').textContent=`將所有教室、所有班別共 ${targets.length} 位學員目前的期限各加 7 天（包含已過期、剩餘 0 堂者）。${missing?missing+' 位未設定期限，會跳過。':''}不扣堂數，也不更改報名日。這是額外順延，請勿為已算過的停課重複補延。`;
-    $('#bulkExtensionPreview').innerHTML=targets.map(s=>`<div class="closure-row"><span><strong>${esc(s.name)} · ${esc(cls(s.classId)?.name||'已刪除班別')}</strong><small>${displayDate(s.expiresAt)} → ${displayDate(addDays(s.expiresAt,7))}</small></span></div>`).join('');
-    $('#bulkExtensionError').textContent='';$('#confirmBulkExtension').disabled=!targets.length;
+    $('#bulkExtensionForm').reset();$('#bulkExtensionDate').value=selectedLesson().date;$('#bulkExtensionReason').value='颱風假';
+    $('#bulkExtensionClass').innerHTML=state.classes.map(c=>`<option value="${esc(c.id)}">${esc(room(c.roomId)?.name||'')} · ${esc(c.name)}</option>`).join('');
+    $('#bulkExtensionClass').value=state.activeClassId;updateBulkExtensionPreview();
     $('#bulkExtensionDialog').showModal();
   }
-  function applyBulkExtension(date,reason){
+  function updateBulkExtensionPreview(){
+    const cid=$('#bulkExtensionClass').value,targets=bulkExtensionTargets(cid),missing=state.students.filter(s=>s.classId===cid).length-targets.length;
+    $('#bulkExtensionSummary').textContent=`只將「${cls(cid)?.name||'請選班級'}」共 ${targets.length} 位學員目前的期限各加 7 天，其他班別不受影響（包含已過期、剩餘 0 堂者）。${missing?missing+' 位未設定期限，會跳過。':''}不扣堂數，也不更改報名日。請勿為已算過的紅字停課重複補延。`;
+    $('#bulkExtensionPreview').innerHTML=targets.map(s=>`<div class="closure-row"><span><strong>${esc(s.name)} · ${esc(cls(s.classId)?.name||'已刪除班別')}</strong><small>${displayDate(s.expiresAt)} → ${displayDate(addDays(s.expiresAt,7))}</small></span></div>`).join('');
+    $('#bulkExtensionError').textContent='';$('#confirmBulkExtension').disabled=!targets.length;
+  }
+  function applyBulkExtension(date,reason,classId){
     if(!validDate(date)||!reason.trim())return {error:'請選擇停課日期並填寫原因。'};
-    if((state.bulkExtensions||[]).some(b=>b.date===date))return {error:'這個停課日期已經全體順延過，不會重複增加。'};
-    const next=JSON.parse(JSON.stringify(state)),targets=bulkExtensionTargets(next);
+    if(!cls(classId))return {error:'請選擇要延後的班級。'};
+    if((state.bulkExtensions||[]).some(b=>!b.cancelledAt&&b.date===date&&(!b.classId||b.classId===classId)))return {error:'這個班級在此停課日期已經順延過。若是誤按，請先撤銷原本的延期。'};
+    const next=JSON.parse(JSON.stringify(state)),targets=bulkExtensionTargets(classId,next);
     if(!targets.length)return {error:'目前沒有已設定有效期限的學員。'};
-    const createdAt=new Date().toISOString(),batch={id:id('bulk'),date,reason:reason.trim().slice(0,80),count:targets.length,createdAt};
+    const createdAt=new Date().toISOString(),batch={id:id('bulk'),date,reason:reason.trim().slice(0,80),count:targets.length,createdAt,classId,className:cls(classId).name,studentIds:targets.map(s=>s.id)};
     targets.forEach(s=>{
       const before=s.expiresAt;
       s.manualExtensionDays=extensionDays(s)+7;
+      (s.extensionBatchIds ||= []).push(batch.id);
       // Preserve the existing holiday calculation; this action adds exactly seven days.
       s.expiresAt=addDays(before,7);
-      next.records.push({id:id('record'),studentId:s.id,classId:s.classId,studentName:s.name,type:'extension',delta:0,eventDate:date,eventTime:'',createdAt,note:`${batch.reason} · 全體順延 7 天 · ${displayDate(before)} → ${displayDate(s.expiresAt)}`});
+      next.records.push({id:id('record'),studentId:s.id,classId:s.classId,studentName:s.name,type:'extension',delta:0,eventDate:date,eventTime:'',createdAt,note:`${batch.reason} · ${batch.className}順延 7 天 · ${displayDate(before)} → ${displayDate(s.expiresAt)}`});
     });
     (next.bulkExtensions ||= []).push(batch);
     try{localStorage.setItem(KEY,JSON.stringify(next));}catch{return {error:'儲存失敗，尚未套用順延。請先下載備份並確認裝置儲存空間，再重試。'};}
     state=next;return {count:targets.length};
+  }
+  function cancelBulkExtension(batchId){
+    const batch=state.bulkExtensions?.find(b=>b.id===batchId);
+    if(!batch||batch.cancelledAt)return {error:'這筆延期已撤銷或不存在，不會重複扣回。'};
+    if(!Array.isArray(batch.studentIds)||batch.studentIds.length!==batch.count)return {error:'這筆舊紀錄缺少完整名單，無法安全撤銷。請保留備份並聯絡協助。'};
+    const next=JSON.parse(JSON.stringify(state)),createdAt=new Date().toISOString();let count=0;
+    for(const s of next.students){
+      if(!s.extensionBatchIds?.includes(batchId))continue;
+      if(extensionDays(s)<7)return {error:'延期資料不一致，尚未修改任何資料。請先保留備份。'};
+      const before=s.expiresAt;s.manualExtensionDays=extensionDays(s)-7;s.extensionBatchIds=s.extensionBatchIds.filter(v=>v!==batchId);syncStudentExpiry(s,next);count++;
+      next.records.push({id:id('record'),studentId:s.id,classId:s.classId,studentName:s.name,type:'extension_cancel',delta:0,eventDate:batch.date,eventTime:'',createdAt,note:`撤銷 ${displayDate(batch.date)} ${batch.reason} · 收回該次 7 天 · ${displayDate(before)} → ${displayDate(s.expiresAt)}`});
+    }
+    next.bulkExtensions.find(b=>b.id===batchId).cancelledAt=createdAt;
+    try{localStorage.setItem(KEY,JSON.stringify(next));}catch{return {error:'儲存失敗，尚未撤銷。請先備份並確認儲存空間，再重試。'};}
+    state=next;return {count,skipped:batch.count-count};
   }
   function renderAll(){renderControls();renderStudents();renderRooms();renderSessions();renderRecords();renderManagers();renderClosures();renderBulkExtensions();}
   function showView(v){$$('.view').forEach(x=>{x.hidden=x.id!==v});$$('.nav-button').forEach(b=>b.classList.toggle('is-active',b.dataset.view===v)); if(v==='roomsView'){renderRooms();renderSessions();renderRecords();}window.scrollTo({top:0,behavior:'smooth'});}
 
   function updateStudentHolidayHelp(){const sid=$('#studentId').value,existing=state.students.find(x=>x.id===sid),draft={...(existing||{}),classId:$('#studentClass').value,enrolledAt:$('#studentEnrolledAt').value,baseExpiresAt:$('#studentExpiresAt').value,expiresAt:$('#studentExpiresAt').value},info=holidayExtensionDetails(draft);$('#studentHolidayHelp').textContent=info.days?`期間遇到 ${info.items.length} 次紅字停課，將自動順延 ${info.days} 天，最終有效至 ${displayDate(effectiveExpiry(draft))}。`:'若期間遇到該班紅字停課，系統會自動往後順延；請先確認班別已設定固定上課日。';}
   function openStudent(sid='',presetClassId=''){const s=state.students.find(x=>x.id===sid),today=localDate();$('#studentForm').reset();$('#studentId').value=s?.id||'';$('#studentDialogTitle').textContent=s?'編輯學員':'新增學員';$('#studentName').value=s?.name||'';$('#studentClass').value=s?.classId||presetClassId||state.activeClassId;$('#studentRemaining').value=s?.remaining??6;$('#studentEnrolledAt').value=s?s.enrolledAt:today;$('#studentExpiresAt').value=s?(s.baseExpiresAt||s.expiresAt):addMonths(today,2);$('#studentNote').value=s?.note||'';$('#deleteStudentButton').hidden=!s;updateStudentHolidayHelp();$('#studentDialog').showModal();}
-  function openStudentHistory(sid){const s=state.students.find(x=>x.id===sid);if(!s)return;studentHistoryId=s.id;const logs=[...state.records].filter(r=>(r.studentId===s.id||(!r.studentId&&r.studentName===s.name&&r.classId===s.classId))&&(r.type==='checkin'||r.type==='renew'||r.type==='leave'||r.type==='extension')).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)), checkins=logs.filter(r=>r.type==='checkin').length, renews=logs.filter(r=>r.type==='renew').length, leaves=logs.filter(r=>r.type==='leave').length, validity=membershipStatus(s),holiday=holidayExtensionDetails(s);$('#studentHistoryTitle').textContent=s.name;$('#studentHistorySubtitle').textContent=`${cls(s.classId)?.name||'已刪除班別'}${s.note?' · '+s.note:''}`;$('#studentHistorySummary').innerHTML=`<div><strong>${s.remaining}</strong><span>剩餘堂數</span></div><div><strong>${checkins}</strong><span>簽到次數</span></div><div><strong>${renews}</strong><span>續卡次數</span></div><div><strong>${leaves}</strong><span>請假次數</span></div>`;$('#studentMembershipStatus').className=`membership-status is-${validity.key}`;$('#studentMembershipStatus').innerHTML=`<div><span>報名日</span><strong>${displayDate(s.enrolledAt)}</strong></div><div><span>原定期限</span><strong>${displayDate(s.baseExpiresAt||s.expiresAt)}</strong></div><div><span>紅字順延</span><strong>${holiday.days?`${holiday.days} 天`:'無'}</strong></div><div><span>全體停課順延</span><strong>${extensionDays(s)} 天</strong></div><div><span>最終期限</span><strong>${displayDate(s.expiresAt)}</strong></div><em>${esc(validity.text)}${holiday.items.length?` · ${esc(holiday.items.map(x=>`${displayDate(x.date)} ${x.name}`).join('、'))}`:''}</em>`;$('#studentHistoryEmpty').hidden=!!logs.length;$('#studentHistoryList').innerHTML=logs.map(r=>`<article class="record-item"><span class="record-mark is-${r.type}">${r.type==='checkin'?'✓':r.type==='renew'?'+':'休'}</span><div><div class="record-title">${typeName[r.type]}</div><div class="record-detail">${esc(cls(r.classId)?.name||'已刪除班別')}${r.note?' · '+esc(r.note):''}</div><div class="record-time">${esc(recordTimeText(r))}</div></div><span class="record-delta${r.delta<0?' is-negative':''}">${r.type==='extension'?'＋7 天':r.type==='leave'?'不扣堂':`${r.delta>0?'＋':''}${r.delta} 堂`}</span></article>`).join('');$('#studentHistoryDialog').showModal();}
+  function openStudentHistory(sid){const s=state.students.find(x=>x.id===sid);if(!s)return;studentHistoryId=s.id;const logs=[...state.records].filter(r=>(r.studentId===s.id||(!r.studentId&&r.studentName===s.name&&r.classId===s.classId))&&(r.type==='checkin'||r.type==='renew'||r.type==='leave'||r.type==='extension'||r.type==='extension_cancel')).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt)), checkins=logs.filter(r=>r.type==='checkin').length, renews=logs.filter(r=>r.type==='renew').length, leaves=logs.filter(r=>r.type==='leave').length, validity=membershipStatus(s),holiday=holidayExtensionDetails(s);$('#studentHistoryTitle').textContent=s.name;$('#studentHistorySubtitle').textContent=`${cls(s.classId)?.name||'已刪除班別'}${s.note?' · '+s.note:''}`;$('#studentHistorySummary').innerHTML=`<div><strong>${s.remaining}</strong><span>剩餘堂數</span></div><div><strong>${checkins}</strong><span>簽到次數</span></div><div><strong>${renews}</strong><span>續卡次數</span></div><div><strong>${leaves}</strong><span>請假次數</span></div>`;$('#studentMembershipStatus').className=`membership-status is-${validity.key}`;$('#studentMembershipStatus').innerHTML=`<div><span>報名日</span><strong>${displayDate(s.enrolledAt)}</strong></div><div><span>原定期限</span><strong>${displayDate(s.baseExpiresAt||s.expiresAt)}</strong></div><div><span>紅字順延</span><strong>${holiday.days?`${holiday.days} 天`:'無'}</strong></div><div><span>停課順延</span><strong>${extensionDays(s)} 天</strong></div><div><span>最終期限</span><strong>${displayDate(s.expiresAt)}</strong></div><em>${esc(validity.text)}${holiday.items.length?` · ${esc(holiday.items.map(x=>`${displayDate(x.date)} ${x.name}`).join('、'))}`:''}</em>`;$('#studentHistoryEmpty').hidden=!!logs.length;$('#studentHistoryList').innerHTML=logs.map(r=>`<article class="record-item"><span class="record-mark is-${r.type}">${r.type==='checkin'?'✓':r.type==='renew'?'+':'休'}</span><div><div class="record-title">${typeName[r.type]}</div><div class="record-detail">${esc(cls(r.classId)?.name||'已刪除班別')}${r.note?' · '+esc(r.note):''}</div><div class="record-time">${esc(recordTimeText(r))}</div></div><span class="record-delta${r.delta<0?' is-negative':''}">${r.type==='extension'?'＋7 天':r.type==='extension_cancel'?'－7 天':r.type==='leave'?'不扣堂':`${r.delta>0?'＋':''}${r.delta} 堂`}</span></article>`).join('');$('#studentHistoryDialog').showModal();}
   function openQuickHoliday(sid){const s=state.students.find(x=>x.id===sid);if(!s)return;if(!validDate(s.enrolledAt)||!validDate(s.baseExpiresAt||s.expiresAt))return alert('請先在「編輯資料」設定這位學員的報名日與原定期限。');const c=cls(s.classId);if(!c||c.weekday===''||c.weekday==null)return alert('請先到設定的班別管理，選擇這個班的固定上課日。');$('#quickHolidayForm').reset();$('#quickHolidayStudentId').value=s.id;$('#quickHolidayStudentName').textContent=`${s.name} · ${c.name}`;$('#quickHolidayDate').value=localDate();$('#quickHolidayName').value='紅字休';$('#quickHolidayHelp').textContent=`確認後，「${c.name}」在這天有效的學員都會直接順延 7 天。`;$('#quickHolidayDialog').showModal();}
   function renewalProjection(s,date,periods=1){const active=s.expiresAt&&s.expiresAt>=date,baseStart=active?(s.baseExpiresAt||s.expiresAt):date,enrolledAt=active&&s.enrolledAt?s.enrolledAt:date,baseExpiry=addMonths(baseStart,Math.max(1,Number(periods)||1)*2),draft={...s,enrolledAt,baseExpiresAt:baseExpiry,expiresAt:baseExpiry,manualExtensionDays:active?extensionDays(s):0},holiday=holidayExtensionDetails(draft);return {active,enrolledAt,baseExpiry,expiry:effectiveExpiry(draft),holiday,manualExtensionDays:draft.manualExtensionDays};}
   function updateRenewHelp(){const s=state.students.find(x=>x.id===$('#renewStudentId').value),date=$('#renewDate').value;if(!s||!validDate(date))return;const p=renewalProjection(s,date,1),extra=p.holiday.days?`，含紅字停課順延 ${p.holiday.days} 天` :'';$('#renewExpiryHelp').textContent=p.active?`每期 6 堂／2 個月；新一期接續計算，預計有效至 ${displayDate(p.expiry)}${extra}。`:`每期 6 堂／2 個月；新期限從續卡日計算至 ${displayDate(p.expiry)}${extra}。`;}
@@ -193,7 +224,7 @@
     $('#undoCountdown').textContent='(7)';$('#snackbar').hidden=false;
     undoTimer=setInterval(()=>{if(!undo)return;undo.seconds--;$('#undoCountdown').textContent=undo.seconds?`(${undo.seconds})`:'';if(!undo.seconds){clearInterval(undoTimer);undo=null;$('#snackbar').hidden=true;}},1000);
   }
-  function renew(sid,n){const s=state.students.find(x=>x.id===sid),periods=parseInt(n),date=$('#renewDate').value;if(!s||!periods||periods<1||!validDate(date))return;const lessons=periods*6,p=renewalProjection(s,date,periods);s.remaining+=lessons;s.enrolledAt=p.enrolledAt;s.baseExpiresAt=p.baseExpiry;s.expiresAt=p.expiry;s.manualExtensionDays=p.manualExtensionDays;addRecord(s,'renew',lessons,`續卡 ${periods} 期（${lessons} 堂）· 有效至 ${displayDate(p.expiry)}${p.holiday.days?` · 紅字順延 ${p.holiday.days} 天`:''}`,date);save();$('#renewDialog').close();renderAll();}
+  function renew(sid,n){const s=state.students.find(x=>x.id===sid),periods=parseInt(n),date=$('#renewDate').value;if(!s||!periods||periods<1||!validDate(date))return;const lessons=periods*6,p=renewalProjection(s,date,periods);s.remaining+=lessons;s.enrolledAt=p.enrolledAt;s.baseExpiresAt=p.baseExpiry;s.expiresAt=p.expiry;s.manualExtensionDays=p.manualExtensionDays;if(!p.active)s.extensionBatchIds=[];addRecord(s,'renew',lessons,`續卡 ${periods} 期（${lessons} 堂）· 有效至 ${displayDate(p.expiry)}${p.holiday.days?` · 紅字順延 ${p.holiday.days} 天`:''}`,date);save();$('#renewDialog').close();renderAll();}
   function takeLeave(sid,date,note=''){const s=state.students.find(x=>x.id===sid);if(!s||!validDate(date))return false;if(wasPresent(s.id,s.classId,date)){alert('這一天已經簽到，請先確認紀錄後再請假。');return false;}if(wasOnLeave(s.id,s.classId,date)){alert('這一天已經有請假紀錄。');return false;}const period=leavePeriodFor(s,date);if(!period){alert('請假日必須在這一期的有效期間內，請先確認報名日與有效期限。');return false;}if(period.count>=2){alert('這一期已經請假 2 次，不能再新增請假。');return false;}addRecord(s,'leave',0,[note.trim(),'固定效期不順延'].filter(Boolean).join(' · '),date);save();return true;}
   function download(name,text,type){const u=URL.createObjectURL(new Blob([text],{type})),a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),1000);}
   function backup(){download(`Ren記事本-完整備份-${localDate()}.json`,JSON.stringify(state,null,2),'application/json');}
@@ -206,11 +237,29 @@
   function moveStudent(sid,offset){const list=state.students.filter(s=>s.classId===state.activeClassId).sort((a,b)=>(a.order??0)-(b.order??0)||a.name.localeCompare(b.name,'zh-Hant')),index=list.findIndex(s=>s.id===sid),target=index+offset;if(index<0||target<0||target>=list.length)return;[list[index],list[target]]=[list[target],list[index]];list.forEach((s,i)=>s.order=i);save();renderStudents();}
   function bindStudentReordering(){const list=$('#studentList');let timer=null,card=null,pointerId=null,startY=0,dragging=false,suppressClick=false;const clear=()=>{clearTimeout(timer);timer=null;};const finish=()=>{clear();if(dragging){persistStudentOrder();card?.classList.remove('is-reordering');dragging=false;suppressClick=true;renderStudents();setTimeout(()=>{suppressClick=false},700);}card=null;pointerId=null;};list.addEventListener('pointerdown',e=>{if(e.button!==0)return;const handle=e.target.closest('[data-drag-handle]');if(isSortMode){if(!handle)return;card=handle.closest('[data-student-card]');pointerId=e.pointerId;dragging=true;card.classList.add('is-reordering');handle.setPointerCapture?.(pointerId);e.preventDefault();return;}if(e.target.closest('.student-actions')||e.target.closest('.reorder-controls')||$('#studentSearch').value.trim())return;card=e.target.closest('[data-student-card]');if(!card)return;pointerId=e.pointerId;startY=e.clientY;timer=setTimeout(()=>{suppressClick=true;enterSortMode();setTimeout(()=>{suppressClick=false},700);card=null;pointerId=null;},520);});list.addEventListener('pointermove',e=>{if(e.pointerId!==pointerId||!card)return;if(!dragging){if(Math.abs(e.clientY-startY)>9){clear();card=null;pointerId=null;}return;}e.preventDefault();const target=document.elementFromPoint(e.clientX,e.clientY)?.closest('[data-student-card]');if(!target||target===card||target.parentElement!==list)return;const rect=target.getBoundingClientRect();list.insertBefore(card,e.clientY<rect.top+rect.height/2?target:target.nextSibling);});list.addEventListener('pointerup',e=>{if(e.pointerId===pointerId)finish();});list.addEventListener('pointercancel',finish);list.addEventListener('click',e=>{if(suppressClick){e.preventDefault();e.stopImmediatePropagation();suppressClick=false;}},true);}
 
+  let pendingCancellationId='';
   function bind(){
     $('#bulkExtensionButton').onclick=$('#settingsBulkExtensionButton').onclick=openBulkExtension;
+    $('#bulkExtensionClass').onchange=updateBulkExtensionPreview;
+    $('#extensionHistoryButton').onclick=()=>{renderBulkExtensions();$('#extensionHistoryDialog').showModal();};
+    const requestCancellation=e=>{
+      const button=e.target.closest('[data-cancel-extension]');if(!button)return;
+      const batch=state.bulkExtensions.find(b=>b.id===button.dataset.cancelExtension);if(!batch)return;
+      pendingCancellationId=batch.id;
+      $('#cancelExtensionText').textContent=`確定撤銷 ${displayDate(batch.date)}「${batch.reason}」？範圍：${batch.className||'舊版所有班別'}，原 ${batch.count} 位學員。只收回這次增加的 7 天，保留簽到、堂數與其他延期。已重新報名且不再沿用這筆延期者會跳過。`;
+      $('#cancelExtensionError').textContent='';$('#cancelExtensionDialog').showModal();
+    };
+    $('#bulkExtensionList').onclick=$('#extensionHistoryList').onclick=requestCancellation;
+    $('#confirmCancelExtension').onclick=()=>{
+      const result=cancelBulkExtension(pendingCancellationId);
+      if(result.error){$('#cancelExtensionError').textContent=result.error;return;}
+      pendingCancellationId='';$('#cancelExtensionDialog').close();renderAll();
+      const message=`已撤銷：${result.count} 位學員收回該次 7 天。${result.skipped?'另有 '+result.skipped+' 位已無此延期或已刪除，未更動。':''}`;
+      $('#extensionHistoryResult').textContent=$('#settingsExtensionResult').textContent=$('#bulkExtensionResult').textContent=message;
+    };
     $('#bulkExtensionForm').onsubmit=e=>{
       e.preventDefault();
-      const result=applyBulkExtension($('#bulkExtensionDate').value,$('#bulkExtensionReason').value);
+      const result=applyBulkExtension($('#bulkExtensionDate').value,$('#bulkExtensionReason').value,$('#bulkExtensionClass').value);
       if(result.error){$('#bulkExtensionError').textContent=result.error;return;}
       $('#bulkExtensionDialog').close();renderAll();
       $('#bulkExtensionResult').textContent=`已完成：${result.count} 位學員的有效期限各延後 7 天。`;
