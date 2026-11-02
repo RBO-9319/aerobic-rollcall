@@ -294,3 +294,9 @@ dialog form { display: grid; gap: 15px; padding: 20px; }
 .lesson-picker input { width:100%; min-width:0; font-size:16px; }
 .lesson-picker p { margin:0; font-size:13px; line-height:1.6; color:var(--primary-dark); }
 #offDayCheckinText { margin:0; line-height:1.7; }
+#bulkExtensionResult:empty, #bulkExtensionError:empty { display:none; }
+#bulkExtensionResult { margin:0 0 14px; color:var(--success); }
+.extension-error { margin:0; color:var(--danger); }
+#bulkExtensionPreview { max-height:240px; overflow-y:auto; }
+#bulkExtensionDialog summary { cursor:pointer; color:var(--primary-dark); }
+#settingsBulkExtensionButton { margin-bottom:12px; }

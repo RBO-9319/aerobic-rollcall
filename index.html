@@ -10,7 +10,7 @@
   <title>Ren的記事本本</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=2.7.0">
+  <link rel="stylesheet" href="./styles.css?v=2.8.0">
 </head>
 <body>
   <div class="app-shell">
@@ -30,11 +30,13 @@
             <p id="attendanceSummary">尚未點名</p>
           </div>
           <div class="section-actions">
+            <button class="secondary-button holiday-button" id="bulkExtensionButton" type="button">全體延後一週</button>
             <button class="secondary-button" id="addStudentButton" type="button">＋ 學員</button>
             <button class="primary-button" id="quickSessionButton" type="button">＋ 記錄本堂</button>
           </div>
         </div>
 
+        <p id="bulkExtensionResult" role="status" class="field-help"></p>
         <div class="class-tabs" id="classTabs" role="tablist" aria-label="班別"></div>
         <div class="lesson-picker">
           <div class="form-grid">
@@ -93,7 +95,7 @@
               <option value="checkin">簽到</option>
               <option value="renew">續卡</option>
               <option value="leave">請假</option>
-              <option value="adjust">調整</option>
+              <option value="adjust">調整</option><option value="extension">全體順延</option>
             </select></label>
           </div>
           <div class="record-list" id="recordList"></div>
@@ -121,6 +123,8 @@
           </article>
           <article class="settings-card">
             <h3>紅字與停課</h3>
+            <button class="secondary-button holiday-button" id="settingsBulkExtensionButton" type="button">全體延後一週</button>
+            <div id="bulkExtensionList" class="closure-list"></div>
             <p>已內建行政院人事行政總處 2026、2027 年國定假日。只有假日撞到班別的固定上課日，效期才會自動順延 7 天。</p>
             <form id="closureForm" class="closure-form">
               <label>停課日期<input id="closureDate" type="date" required></label>
@@ -198,6 +202,19 @@
       </div>
       <div class="dialog-actions student-history-actions"><button class="secondary-button" id="editStudentFromHistoryButton" type="button">編輯資料</button><button class="secondary-button holiday-button" id="addHolidayFromHistoryButton" type="button">＋紅字休</button><button class="secondary-button" id="leaveStudentFromHistoryButton" type="button">請假</button><span class="spacer"></span><button class="primary-button" id="renewStudentFromHistoryButton" type="button">續卡</button></div>
     </div>
+  </dialog>
+
+  <dialog id="bulkExtensionDialog" class="wide-dialog">
+    <form id="bulkExtensionForm" method="dialog">
+      <div class="dialog-heading"><h2>全體延後一週</h2><button class="close-button" type="button" data-close="bulkExtensionDialog" aria-label="關閉">×</button></div>
+      <label>停課日期<input id="bulkExtensionDate" type="date" required></label>
+      <label>原因<input id="bulkExtensionReason" list="bulkExtensionReasons" maxlength="80" required placeholder="颱風假、老師事假或其他原因"></label>
+      <datalist id="bulkExtensionReasons"><option value="颱風假"></option><option value="老師事假"></option><option value="臨時停課"></option></datalist>
+      <p id="bulkExtensionSummary" class="field-help"></p>
+      <details><summary>查看學員與延後日期</summary><div id="bulkExtensionPreview"></div></details>
+      <p id="bulkExtensionError" role="alert" class="extension-error"></p>
+      <div class="dialog-actions"><span class="spacer"></span><button class="secondary-button" type="button" data-close="bulkExtensionDialog">取消</button><button class="primary-button" id="confirmBulkExtension" type="submit">確定全部延後 7 天</button></div>
+    </form>
   </dialog>
 
   <dialog id="quickHolidayDialog">
@@ -292,7 +309,7 @@
     <span id="snackbarText"></span><button id="undoButton" type="button">復原 <span id="undoCountdown"></span></button>
   </div>
 
-  <script src="./holidays.js?v=2.7.0"></script>
-  <script src="./app.js?v=2.7.0"></script>
+  <script src="./holidays.js?v=2.8.0"></script>
+  <script src="./app.js?v=2.8.0"></script>
 </body>
 </html>
